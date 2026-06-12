@@ -286,65 +286,366 @@ export function appendCurve(segments, curve, N = 32) {
 export function tangentCircleCircle3D(C1, R1, axis1, C2, R2, axis2) {
 
   // -------------------------------------------------
-  // initial guess: direction between centres
+  // Initial guess: direction between centres
   // -------------------------------------------------
   let d = C2.clone().sub(C1).normalize();
 
   // -------------------------------------------------
-  // project helper (same idea as before)
+  // Construct tangent points for a given direction
+  // Ensures:
+  //   - point lies in circle plane
+  //   - radius ⟂ direction (true tangency)
   // -------------------------------------------------
-  function projectToPlane(v, axis) {
-    const h = v.dot(axis);
-    return v.clone().sub(axis.clone().multiplyScalar(h));
-  }
+function tangentPoints(C, R, axis, dir) {
 
+  // STEP 1: project dir into plane
+  const d_proj = dir.clone().sub(
+    axis.clone().multiplyScalar(dir.dot(axis))
+  );
+
+  if (d_proj.lengthSq() < 1e-12) return [];
+
+  d_proj.normalize();
+
+  // STEP 2: rotate 90° in plane
+  const rDir = new THREE.Vector3()
+    .crossVectors(axis, d_proj)
+    .normalize();
+
+  return [
+    C.clone().addScaledVector(rDir,  R),
+    C.clone().addScaledVector(rDir, -R)
+  ];
+}
   // -------------------------------------------------
-  // compute tangent point on a circle for given dir
-  // -------------------------------------------------
-  function tangentPoint(C, R, axis, dir) {
-
-    // direction perpendicular to radius
-    const p = projectToPlane(dir, axis).normalize();
-
-    // perpendicular in plane
-    const q = new THREE.Vector3().crossVectors(axis, p).normalize();
-
-    // choose one branch (you’ll later take ±)
-    const r = p.clone().multiplyScalar(R);
-
-    return C.clone().add(r);
-  }
-
-  // -------------------------------------------------
-  // iterative solve
+  // Iterative solve for direction
   // -------------------------------------------------
   for (let i = 0; i < 20; i++) {
 
-    const T1 = tangentPoint(C1, R1, axis1, d);
-    const T2 = tangentPoint(C2, R2, axis2, d);
+    // use consistent branch during iteration
+    const [T1] = tangentPoints(C1, R1, axis1, d);
+    const [T2] = tangentPoints(C2, R2, axis2, d);
+
+    if (!T1 || !T2) break;
 
     const v = T2.clone().sub(T1);
 
-    // error: v should align with d
+    // component of v perpendicular to d
     const v_proj = d.clone().multiplyScalar(v.dot(d));
     const err = v.clone().sub(v_proj);
 
-    const errMag = err.length();
+    if (err.length() < 1e-6) break;
 
-    if (errMag < 1e-6) {
-      return { T1, T2, dir: d.clone() };
-    }
-
-    // nudge direction slightly
-    const correction = err.clone().multiplyScalar(-0.5);
-
-    d.add(correction).normalize();
+    // update direction
+    d.add(err.clone().multiplyScalar(-0.5)).normalize();
   }
 
-  // fallback (last iteration)
-  const T1 = tangentPoint(C1, R1, axis1, d);
-  const T2 = tangentPoint(C2, R2, axis2, d);
 
-//  return { T1, T2, dir: d.clone() };
-  return [{ T1, T2, dir: d.clone() }];
+  const [T1aa] = tangentPoints(C1, R1, axis1, d);
+  const [T2aa] = tangentPoints(C2, R2, axis2, d);
+
+  const r1 = T1aa.clone().sub(C1);
+  const r2 = T2aa.clone().sub(C2);
+
+  console.log("check1 (should be 0):", r1.dot(d));
+  console.log("check2 (should be 0):", r2.dot(d));
+
+
+
+
+
+
+  // -------------------------------------------------
+  // Build final solutions (± branch)
+  // -------------------------------------------------
+  const pts1 = tangentPoints(C1, R1, axis1, d);
+  const pts2 = tangentPoints(C2, R2, axis2, d);
+
+  // guard against degeneracy
+  if (pts1.length < 2 || pts2.length < 2) {
+    return [];
+  }
+
+  const [T1a, T1b] = pts1;
+  const [T2a, T2b] = pts2;
+
+
+
+  const v = T2a.clone().sub(T1a).normalize();
+
+  console.log("line alignment:", v.dot(d));
+
+  return [
+    { T1: T1a, T2: T2a, dir: d.clone() },
+    { T1: T1b, T2: T2b, dir: d.clone() }
+  ];
 }
+
+function solveWithInitial(C1, R1, axis1, C2, R2, axis2, d0) {
+
+  let d = d0.clone().normalize();
+
+  function tangentPoints(C, R, axis, dir) {
+    const d_proj = dir.clone().sub(
+      axis.clone().multiplyScalar(dir.dot(axis))
+    );
+
+    if (d_proj.lengthSq() < 1e-12) return [];
+
+    d_proj.normalize();
+
+    const rDir = new THREE.Vector3()
+      .crossVectors(axis, d_proj)
+      .normalize();
+
+    return [
+      C.clone().addScaledVector(rDir,  R),
+      C.clone().addScaledVector(rDir, -R)
+    ];
+  }
+
+  // --- iterate ---
+  for (let i = 0; i < 20; i++) {
+
+    const [T1] = tangentPoints(C1, R1, axis1, d);
+    const [T2] = tangentPoints(C2, R2, axis2, d);
+
+    if (!T1 || !T2) break;
+
+    const r1 = T1.clone().sub(C1);
+    const r2 = T2.clone().sub(C2);
+
+    const err1 = r1.dot(d);
+    const err2 = r2.dot(d);
+
+    if (Math.abs(err1) + Math.abs(err2) < 1e-6) break;
+
+    const grad = r1.clone().multiplyScalar(err1)
+      .addScaledVector(r2, err2);
+
+    d.sub(grad.multiplyScalar(0.2)).normalize();
+  }
+
+  // --- final points ---
+  const pts1 = tangentPoints(C1, R1, axis1, d);
+  const pts2 = tangentPoints(C2, R2, axis2, d);
+
+  if (pts1.length < 2 || pts2.length < 2) return [];
+
+  const [T1a, T1b] = pts1;
+  const [T2a, T2b] = pts2;
+
+  return [
+    { T1: T1a, T2: T2a, dir: d.clone() },
+    { T1: T1b, T2: T2b, dir: d.clone() }
+  ];
+}
+
+export function tangentCircleCircle3D_All(C1, R1, axis1, C2, R2, axis2) {
+
+  const results = [];
+
+  // =====================================================
+  // Tangent construction (correct, verified)
+  // =====================================================
+  function tangentPoints(C, R, axis, dir) {
+
+    const d_proj = dir.clone().sub(
+      axis.clone().multiplyScalar(dir.dot(axis))
+    );
+
+    if (d_proj.lengthSq() < 1e-12) return [];
+
+    d_proj.normalize();
+
+    const rDir = new THREE.Vector3()
+      .crossVectors(axis, d_proj)
+      .normalize();
+
+    return [
+      C.clone().addScaledVector(rDir,  R),
+      C.clone().addScaledVector(rDir, -R)
+    ];
+  }
+
+  // =====================================================
+  // Build only VALID solutions (key filter)
+  // =====================================================
+  function buildSolutions(d, pts1, pts2) {
+
+    if (pts1.length < 2 || pts2.length < 2) return [];
+
+    const [T1a, T1b] = pts1;
+    const [T2a, T2b] = pts2;
+
+    const candidates = [
+      { T1: T1a, T2: T2a },
+      { T1: T1b, T2: T2b }
+    ];
+
+    const out = [];
+
+    for (const c of candidates) {
+
+      const v = c.T2.clone().sub(c.T1).normalize();
+
+      // ✅ keep only if aligned with direction
+      if (Math.abs(v.dot(d)) > 0.99) {
+        out.push({
+          T1: c.T1,
+          T2: c.T2,
+          dir: d.clone()
+        });
+      }
+    }
+
+    return out;
+  }
+
+  // =====================================================
+  // Single solver (one family)
+  // =====================================================
+  function solveWithInitial(d0, R2_eff) {
+
+    let d = d0.clone().normalize();
+
+    for (let i = 0; i < 20; i++) {
+
+      const [T1] = tangentPoints(C1, R1, axis1, d);
+      const [T2] = tangentPoints(C2, R2_eff, axis2, d);
+
+      if (!T1 || !T2) break;
+
+      const r1 = T1.clone().sub(C1);
+      const r2 = T2.clone().sub(C2);
+
+      const err1 = r1.dot(d);
+      const err2 = r2.dot(d);
+
+      if (Math.abs(err1) + Math.abs(err2) < 1e-6) break;
+
+      const grad = r1.clone().multiplyScalar(err1)
+        .addScaledVector(r2, err2);
+
+      d.sub(grad.multiplyScalar(0.2)).normalize();
+    }
+
+    const pts1 = tangentPoints(C1, R1, axis1, d);
+    const pts2 = tangentPoints(C2, R2_eff, axis2, d);
+
+    return buildSolutions(d, pts1, pts2);
+  }
+
+  // =====================================================
+  // Seed generation (robust exploration)
+  // =====================================================
+  const v = C2.clone().sub(C1).normalize();
+  const n = new THREE.Vector3().crossVectors(axis1, v).normalize();
+
+  const seeds = [
+    v,
+    v.clone().negate(),
+
+    n,
+    n.clone().negate(),
+
+    v.clone().add(n).normalize(),
+    v.clone().sub(n).normalize(),
+    v.clone().negate().add(n).normalize(),
+    v.clone().negate().sub(n).normalize()
+  ];
+
+  // =====================================================
+  // OUTER tangents
+  // =====================================================
+  for (const d0 of seeds) {
+    results.push(...solveWithInitial(d0,  R2));
+  }
+
+  // =====================================================
+  // INNER tangents (critical: sign flip)
+  // =====================================================
+  for (const d0 of seeds) {
+    results.push(...solveWithInitial(d0, -R2));
+  }
+
+  // =====================================================
+  // Deduplicate
+  // =====================================================
+  return uniqueSolutions(results);
+}
+
+function buildSolutions(d, pts1, pts2) {
+
+  if (pts1.length < 2 || pts2.length < 2) return [];
+
+  const [T1a, T1b] = pts1;
+  const [T2a, T2b] = pts2;
+
+  const candidates = [
+    { T1: T1a, T2: T2a },
+    { T1: T1b, T2: T2b }
+  ];
+
+  const out = [];
+
+  for (const c of candidates) {
+
+    const v = c.T2.clone().sub(c.T1).normalize();
+
+    // ✅ Keep only if aligned with direction
+    if (Math.abs(v.dot(d)) > 0.99) {
+      out.push({
+        T1: c.T1,
+        T2: c.T2,
+        dir: d.clone()
+      });
+    }
+  }
+
+  return out;
+}
+
+function uniqueSolutions(sols) {
+
+  const out = [];
+
+  for (const s of sols) {
+
+    const exists = out.some(o =>
+      o.T1.distanceTo(s.T1) < 1e-5 &&
+      o.T2.distanceTo(s.T2) < 1e-5
+    );
+
+    if (!exists) out.push(s);
+  }
+
+  return out;
+}
+
+/**
+ * Estimate eye circumference based on simplified EN 13414-3 geometry.
+ *
+ * Model:
+ * - Eye approximated as:
+ *   • isosceles triangle + semicircle cap
+ * - Total height h = 15 d
+ * - Cap diameter w = h / 2 = 7.5 d
+ *
+ * Derived circumference:
+ *   C = d * (15 * sqrt(5/2) + (15π)/4)
+ *
+ * Reference:
+ * - EN 13414-3, Section 5.2.2 (geometry inspired by Fig. 2)
+ * - This is an approximation for default visualisation only
+ *
+ * @param {number} d - rope diameter
+ * @returns {number} eye circumference
+ */
+export function estimateEyeCircumference(d) {
+  return d * (
+    15 * Math.sqrt(5 / 2) +
+    (15 * Math.PI) / 4
+  );
+}
+

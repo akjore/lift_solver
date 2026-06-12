@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SlingEye } from './SlingEye.js';
+import { estimateEyeCircumference } from './GeometryUtils.js';
 
 export class SlingAssemblyBuilder {
 
@@ -8,6 +9,16 @@ export class SlingAssemblyBuilder {
   }
 
   build() {
+    function resolveEyeCircumference(slingData) {
+
+      const d = slingData.d;
+
+      if (slingData.eyeCircumference != null) {
+        return slingData.eyeCircumference;
+      }
+
+      return estimateEyeCircumference(d);
+    }
 
     const segments = [];
     const ropeRadius = this.data.d / 2;
@@ -31,7 +42,8 @@ export class SlingAssemblyBuilder {
       ...startPin,
       D: startPin.D,             // ✅ ADD THIS
       d: this.data.d,
-      eyeCircumference: this.data.eyeCircumference,
+//      eyeCircumference: this.data.eyeCircumference,
+      eyeCircumference: resolveEyeCircumference(this.data),
       L_splice: this.data.spliceLength,
       direction: startDir.toArray()
     }).build();
@@ -73,7 +85,8 @@ export class SlingAssemblyBuilder {
       ...endPin,
       D: endPin.D,               // ✅ ADD THIS
       d: this.data.d,
-      eyeCircumference: this.data.eyeCircumference,
+//      eyeCircumference: this.data.eyeCircumference,
+      eyeCircumference: resolveEyeCircumference(this.data),
       L_splice: this.data.spliceLength,
       direction: endDir.toArray()
     }).build();
