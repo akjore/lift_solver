@@ -1,15 +1,13 @@
 """Creates a shackle."""
 
-import csv
 import logging
-from math import pi
-from pathlib import Path
 from typing import Self
 
 import numpy as np
 
 from .attachment_point import AttachmentPoint
 from .rigid_body_base import RigidBodyBase
+from .constraint import PinConstraint
 from . import ureg, Q_
 
 logger = logging.getLogger(__name__)
@@ -92,16 +90,7 @@ class Shackle(RigidBodyBase):
 
 
     def connect_pin_to(self, target: AttachmentPoint):
-
-        print("=== CONNECT DEBUG START ===")
-
-        print("Target global:", target.global_position())
-        print("Target axis  :", target.global_axis())
-
-        print("Pin local pos:", self.pin.position_local)
-        print("Pin local ax :", self.pin.axis_local)
-
-
+        """Move shackle pin such that it coincides with target, and pin aligns with hole axis."""
         if self.parent is not None:
             self.parent.remove_child(self)
 
@@ -122,21 +111,23 @@ class Shackle(RigidBodyBase):
         t = p_target - R @ p_local
 
         # --- 5. Convert into parent-local coordinates ---
-#        if parent_body.parent is None:
-#            # parent is root → easy case
-#            self.position = t
-#            self.rotation = R
-#        else:
-            # general case: convert global → parent-local
         R_parent = parent_body.global_rotation()
         t_parent = parent_body.global_position()
 
         self.rotation = R_parent.T @ R
         self.position = R_parent.T @ (t - t_parent)
 
-
         # --- 6. Attach to parent ---
         parent_body.add_child(self)
+
+        # --- 7. Return pin constraint ---
+        constraint = PinConstraint(
+            id = f"{self.pin.id}.constraint",
+            ap1 = self.pin,
+            ap2 = target,
+        )
+        constraint.validate()
+        return constraint
 
 
     @classmethod
@@ -271,39 +262,8 @@ class Shackle(RigidBodyBase):
 
         return np.eye(3)
 
-
-
-
-
-
-
-#    @property
-#    def shackle_rotation_matrix(self: Self) -> np.array:
-#        """Return shackle's current rotation matrix."""
-#        return self._mbs.GetObjectOutputBody(
-#            self.body_number,
-#            exu.OutputVariableType.RotationMatrix,
-#            localPosition=[0, 0, 0],
-#            configuration=exu.ConfigurationType.Reference,
-#        ).reshape(3, 3)
-
-#    def rotate(self, angle: float) -> None:
-#        """Rotate shackle by 'angle' degrees about the pin."""
-#        mbs = self._mbs
-
-#        # get shackle node number and 1x7 reference array
-#        shackle_node_no = mbs.GetObject(self.body_number)["nodeNumber"]
-#        reference_coordinates = mbs.GetNode(shackle_node_no)["referenceCoordinates"]
-
-#        # apply the desired rotation - convert degrees to radians
-#        shackle_rotation_matrix = self.shackle_rotation_matrix @ exu.utilities.RotationMatrixX(np.radians(angle))
-
-#        # update the reference coordinates
-#        reference_coordinates[3:] = exu.utilities.RotationMatrix2EulerParameters(shackle_rotation_matrix)
-
-#        # update mbs
-#        mbs.SetNodeParameter(shackle_node_no, "referenceCoordinates", reference_coordinates)
-
+import csv
+from pathlib import Path
 
 
 class BaseAdapter:
@@ -400,7 +360,6 @@ class ShackleLibrary:
         self._data = {}
         self._is_loaded = False
 
-
     def load(self):
         if self._is_loaded:
             return
@@ -412,10 +371,8 @@ class ShackleLibrary:
 
         self._is_loaded = True
 
-
     def add(self, shackle: Shackle):
         self._data[shackle.model] = shackle
-
 
     def get(self, model: str) -> Shackle:
         if not self._is_loaded:

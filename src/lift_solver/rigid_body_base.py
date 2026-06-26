@@ -1,22 +1,28 @@
 import numpy as np
 
+from . import ureg
+
 
 class RigidBodyBase:
     def __init__(self, id: str = None):
         self.id = id
 
         # Local transform relative to parent
-        self.position = np.zeros(3)
-        self.rotation = np.eye(3)
+        self.position = np.zeros(3) * ureg.meters
+        self.rotation = np.eye(3) * ureg.degrees
 
         # Hierarchy
         self.parent = None
         self.children = []
+        self.attachment_points = {}
 
     # -------------------------------
     # Hierarchy management
     # -------------------------------
     def add_child(self, child: "RigidBodyBase"):
+        if child.parent is not None:
+            raise RuntimeError("Child already has a parent")
+
         self.children.append(child)
         child.parent = self
 
@@ -38,16 +44,17 @@ class RigidBodyBase:
     # -------------------------------
     def set_pose(self, position, orientation):
         self.position = position
-        self.rotation = self._euler_to_matrix(orientation)
+        self.rotation = self._euler_to_matrix(orientation.to("radians"))
 
     def translate(self, vec):
-        self.position += np.array(vec)
+        self.position += vec
 
     def rotate(self, R_new):
         self.rotation = R_new @ self.rotation
 
 
     def _euler_to_matrix(self, euler):
+        # Euler convention: ZYX (Rz @ Ry @ Rx)
         rx, ry, rz = euler
 
         Rx = np.array([

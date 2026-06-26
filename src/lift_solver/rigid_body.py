@@ -18,9 +18,10 @@ class RigidBody(RigidBodyBase):
             orientation = kwargs["pose"].get("orientation")
             self.set_pose(position, orientation)
 
-        if "visual" in kwargs:
-            self.offset = kwargs["visual"].get("offset")
-            self.size = kwargs["visual"].get("size")
+#        if "visual" in kwargs:
+#            self.offset = kwargs["visual"].get("offset")
+#            self.size = kwargs["visual"].get("size")
+        self.visual = kwargs.get("visual")
 
         # Attachment points
         for id, props in kwargs["points"].items():
@@ -36,7 +37,8 @@ class RigidBody(RigidBodyBase):
 #                radius = radius,
             )
 
-            self.add_child(attachment_point)
+#            self.add_child(attachment_point)
+            self.attachment_points[id] = attachment_point
 
         # Create graphics
 

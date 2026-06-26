@@ -9,6 +9,8 @@ import yaml
 from . import Q_, ureg
 from .rigid_body import RigidBody
 from .shackle import Shackle
+from .sling import Sling
+from .constraint import GenericJoint, World
 
 logger = logging.getLogger(__name__)
 
@@ -17,26 +19,109 @@ class LiftProblem():
     """Data related to a single lift problem."""
 
     def __init__(self):
-        pass
+        self.objects = {}               # Rigid bodies (including shackles)
+        self.attachment_points = {}     # All attachment points
+        self.connections = {}           # Pin joints, etc.
+        self.rigging = {}               # All slings and grommets
+
+        self.world = World()
 
 
-    def parse_quantity(self, value):
-        """Convert YAML value into a Pint Quantity."""
-        if isinstance(value, str):
-            return Q_(value)
-        return value
+    def from_yaml(self, text: str):
+        """Parse the provided text as yaml-input, and build the lift problem to be solved."""
+        # Keep a copy of the provided data
+        self._raw = yaml.load(text, Loader=yaml.SafeLoader)
+        self.registry = {}
 
-
-    def parse_vector(self, vec):
-        lst = [self.parse_quantity(v) for v in vec]
         try:
-            return Q_.from_list(lst)
-        except AttributeError:
-            return lst
+            data = self.normalize_units(self._raw)
+            self.registry = {}
+            self.from_dict(data)
+        except ValueError as exc:
+            msg = "No input or malformed input provided."
+            raise ValueError(msg) from exc
+        else:
+            return self
 
 
-    def is_scalar(self, value):
-        return isinstance(value, (int, float, str))
+    def from_dict(self, problem: dict):
+        # Set up environment
+        self.g = problem["environment"]["gravity"]
+
+        # Add the bodies
+        bodies = problem.get("bodies")
+        if bodies:
+            for body in bodies:
+                self.add_body(body)
+
+        # Add the shackles
+        shackles = problem.get("shackles")
+        if shackles:
+            for shackle in shackles:
+                self.add_shackle(shackle)
+
+        # Add the slings
+        slings = problem.get("elements")
+        if slings:
+            for sling in slings:
+                self.add_sling(sling)
+
+        # Add the constraints
+        constraints = problem.get("constraints")
+        if constraints:
+            for constraint in constraints:
+                self.add_constraint(constraint)
+
+
+    def add_body(self, body: dict):
+        """Add a body to the lift problem with the properties given by 'body'."""
+        bdy = RigidBody(body["id"])
+        bdy.from_dict(body)
+
+        self.objects[bdy.id] = bdy
+
+        for val in bdy.attachment_points.values():
+            key = bdy.id + "." + val.id
+            self.attachment_points[key] = val
+
+        return bdy
+
+
+    def add_shackle(self, shackle: dict):
+        """Add a shackle to the lift problem with the properties given by 'shackle'."""
+        sh = Shackle().from_model(shackle["id"], shackle["model"])
+
+        pin_constraint = sh.connect_pin_to(self.attachment_points[shackle.get("pin_connection")])
+        self.connections[pin_constraint.id] = pin_constraint
+
+        self.objects[sh.id] = sh
+
+        return sh
+
+
+    def add_sling(self, sling: dict):
+        """Add a sling to the lift problem with the properties given by 'sling'."""
+        sl = Sling(**sling)
+
+        # Resolve attachment points and sheaves to AttachmentPoint objects
+        sl.end_a = self.attachment_points[sl.end_a]
+        sl.end_b = self.attachment_points[sl.end_b]
+        sl.sheaves = [self.attachment_points[sheave] for sheave in sl.sheaves]
+
+        self.rigging[sl.id] = sl
+
+
+    def add_constraint(self, constraint: dict):
+        """Add a constraint to the lift problem with the properties give by 'constraint'."""
+        cn = GenericJoint(**constraint)
+
+        cn.ap1 = self.attachment_points[cn.ap1]
+        if not cn.ap2 or cn.ap2 == "world":
+            cn.ap2 = self.world
+        else:
+            cn.ap2 = self.attachment_points[cn.ap2]
+
+        self.connections[cn.id] = cn
 
 
     def normalize_units(self, obj):
@@ -65,99 +150,28 @@ class LiftProblem():
             return obj
 
 
-    def from_yaml(self, text: str):
-        """Parse the provided text as yaml-input, and build the lift problem to be solved."""
-        # Keep a copy of the provided data
-        self._raw = yaml.load(text, Loader=yaml.SafeLoader)
-        self.registry = {}
+    def parse_quantity(self, value):
+        """Convert YAML value into a Pint Quantity."""
+        if isinstance(value, str):
+            return Q_(value)
+        return value
 
+
+    def parse_vector(self, vec):
+        lst = [self.parse_quantity(v) for v in vec]
         try:
-            data = self.normalize_units(self._raw)
-            self.registry = {}
-            self.from_dict(data)
-        except ValueError as exc:
-            msg = "No input or malformed input provided."
-            raise ValueError(msg) from exc
-        else:
-            return self
-
-    def add_to_registry(self, prefix:str, lst: list) -> None:
-        for itm in lst:
-            key = prefix + "." + itm.id
-            self.registry[key] = itm
-
-    def resolve_attachment(self, attachment_ref: str):
-        return self.registry[attachment_ref]
-
-    def add_body(self, body: dict):
-        """Add a body to the lift problem with the properties given by 'body'."""
-        bdy = RigidBody(body["id"])
-        bdy.from_dict(body)
-        self.add_to_registry(bdy.id, bdy.children)
-        return bdy
+            return Q_.from_list(lst)
+        except AttributeError:
+            return lst
 
 
-    def add_shackle(self, shackle: dict):
-        """Add a shackle to the lift problem with the properties given by 'shackle'."""
-        sh = Shackle().from_model(shackle["id"], shackle["model"])
-
-        target = self.resolve_attachment(shackle.get("pin_connection"))
-        sh.connect_pin_to(target)
-
-        return sh
+    def is_scalar(self, value):
+        return isinstance(value, (int, float, str))
 
 
-    def positions_equal(self, a, b, tol=1e-9):
-        print(f"a: {a}")
-        print(f"b: {b}")
-        return np.allclose(
-            a.to("meter").magnitude,
-            b.to("meter").magnitude,
-            atol=tol
-        )
-
-
-
-    def from_dict(self, problem: dict):
-        # Set up environment
-        self.g = problem["environment"]["gravity"]
-
-        # Create the bodies
-        for body in problem["bodies"]:
-            bdy = self.add_body(body)
-            self.registry[bdy.id] = bdy
-
-        # Create the shackles
-        for shackle in problem["shackles"]:
-            sh = self.add_shackle(shackle)
-            self.registry[sh.id] = sh
-
-        # Create the slings
-#        for sling in problem["elements"]:
-#            self.components.append(Sling(sling))
-
-
-        # Create constraints
-#        for constraint in problem["constraints"]:
-#            self.components.append(Constraint(constraint))
-
-#        print("The following components exist in the registry:")
-#        for component in self.registry.values():
-#            print()
-#            print(f"id: {component.id}")
-#            print(f"    mass: {component.mass}")
-#            print(f"    position: {component.position}")
-#            print(f"    global_position: {component.global_position()}")
-#            print(f"    parent: {component.parent}")
-#            print(f"    children: {component.children}")
-#            for child in component.children:
-#                print(f"        Child id: {child.id}")
-#                print(f"        Child position: {child.position_local}")
-#                print(f"        Child global position: {child.global_position()}")
-
-#        assert self.registry["sh1"].pin.global_position() == self.registry["spreader.left_lower"].global_position()
-
-        print(self.positions_equal(
-            self.registry["sh1"].pin.global_position(),
-            self.registry["spreader.left_lower"].global_position()
-        ))
+#    def positions_equal(self, a, b, tol=1e-9):
+#        return np.allclose(
+#            a.to("meter").magnitude,
+#            b.to("meter").magnitude,
+#            atol = tol,
+#        )
