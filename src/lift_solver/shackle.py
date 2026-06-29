@@ -7,21 +7,25 @@ from typing import Self
 
 import numpy as np
 
+from . import Q_, ureg
 from .attachment_point import AttachmentPoint
-from .rigid_body_base import RigidBodyBase
 from .constraint import PinConstraint
+from .rigid_body_base import RigidBodyBase
 from .visual_geometry import Mesh
-from . import ureg, Q_
 
 logger = logging.getLogger(__name__)
 
 
 class Transform:
-    def __init__(self, position=None, rotation=None):
+    """Class to hold transformation details."""
+
+    def __init__(self, position: np.array(3) = None, rotation: np.array(3) = None) -> None:
+        """Initialize."""
         self.position = np.array(position if position is not None else [0, 0, 0])
         self.rotation = rotation if rotation is not None else np.eye(3)
 
-    def matrix(self):
+    def matrix(self) -> np.array(3):
+        """Return transformation matrix."""
         T = np.eye(4)
         T[:3, :3] = self.rotation
         T[:3, 3] = self.position
@@ -117,7 +121,8 @@ class Shackle(RigidBodyBase):
             )
 
 
-    def global_rotation(self):
+    def global_rotation(self: Self) -> np.array(3):
+        """Return global rotation of shackle."""
         R = super().global_rotation()
 
         if self.rotation_about_pin:
@@ -133,7 +138,8 @@ class Shackle(RigidBodyBase):
 
 
     @property
-    def mode(self):
+    def mode(self: Self) -> str:
+        """Return if shackle is connected to a body."""
         if self.pin_connection:
             return "connected"
         elif self.pose:
@@ -141,7 +147,8 @@ class Shackle(RigidBodyBase):
         return "free"
 
 
-    def rot_axis_angle(self, axis, angle):
+    def rot_axis_angle(self: Self, axis: np.array(3), angle: float) -> np.array(3):
+        """Return rotation matrix based on rotation and axis."""
         axis = np.asarray(axis, dtype=float)
         axis = axis / np.linalg.norm(axis)
 
@@ -160,31 +167,14 @@ class Shackle(RigidBodyBase):
         return R
 
 
-    def global_transform(self):
+    def global_transform(self: Self) -> np.array(3):
+        """Return transformation matrix."""
         if self.parent:
             return self.parent.global_transform() @ self.transform.matrix()
         return self.transform.matrix()
 
 
-#    def global_rotation(self):
-
-#        if self.mode == "free":
-#            return self.pose.orientation_matrix()
-
-#        elif self.mode == "connected":
-#            R = super().global_rotation()  # from constraint initialization
-
-#            if self.rotation_about_pin:
-#                axis_local = self.pin.axis_local
-#                axis_global = R @ axis_local
-
-#                angle = self.rotation_about_pin.to("rad").magnitude
-#                R = self.rot_axis_angle(axis_global, angle) @ R
-
-#            return R
-
-
-    def connect_pin_to(self, target: AttachmentPoint):
+    def connect_pin_to(self: Self, target: AttachmentPoint) -> PinConstraint:
         """Move shackle pin such that it coincides with target, and pin aligns with hole axis."""
         constraint = None
         if target:
@@ -231,6 +221,7 @@ class Shackle(RigidBodyBase):
 
     @classmethod
     def from_model(cls, id: str, model: str) -> "Shackle":
+        """Return a shackle object based on provided model."""
         data = SHACKLE_LIBRARY.get(model)
 
         return cls(
@@ -250,7 +241,7 @@ class Shackle(RigidBodyBase):
         return self._id
 
     @id.setter
-    def id(self: Self, value: str):
+    def id(self: Self, value: str) -> None:
         self._id = value
 
 
@@ -260,8 +251,9 @@ class Shackle(RigidBodyBase):
         return self._model
 
     @model.setter
-    def model(self: Self, value: str):
+    def model(self: Self, value: str) -> None:
         self._model = value
+
 
     @property
     def wll(self: Self) -> float:
@@ -269,40 +261,31 @@ class Shackle(RigidBodyBase):
         return self._wll
 
     @wll.setter
-    def wll(self: Self, value: float):
+    def wll(self: Self, value: float) -> None:
         self._wll = value
+
 
     @property
     def _pin_ap_position(self: Self) -> float:
         """Position of the centre of the pin."""
-
         # Definition choice. Centre of pin at origin. Shackle modelled in the xz-plane
         return np.array([0, 0, 0]) * ureg.meters
+
 
     @property
     def _pin_axis(self: Self) -> float:
         """Longitudinal axis of pin."""
-
         # Definition choice.
         return [1, 0, 0]
 
+
     @property
     def _bow_ap_position(self: Self) -> float:
-        """Position of the centre of the pin."""
-
+        """Return position of the centre of the pin."""
         # Ensure bearing-bearing length is right
         ap_distance = 0.5 * self.pin_diameter + self.inside_length + 0.5 * self.bow_diameter
         return self._pin_ap_position + np.array([0, 0, 1]) * ap_distance
 
-#    @property
-#    def mbl(self: Self) -> float:
-#        """Shackle MBL."""
-#        return self.shackle_properties["MBL [t]"]
-
-#    @property
-#    def width(self: Self) -> float:
-#        """Shackle width."""
-#        return self.shackle_properties["width [mm]"] / 1000
 
     @property
     def pin_diameter(self: Self) -> float:
@@ -313,6 +296,7 @@ class Shackle(RigidBodyBase):
     def pin_diameter(self: Self, value: float) -> None:
         self._pin_diameter = value
 
+
     @property
     def bow_diameter(self: Self) -> float:
         """Shackle bow diameter."""
@@ -321,6 +305,7 @@ class Shackle(RigidBodyBase):
     @bow_diameter.setter
     def bow_diameter(self: Self, value: float) -> None:
         self._bow_diameter = value
+
 
     @property
     def inside_length(self: Self) -> float:
@@ -331,6 +316,7 @@ class Shackle(RigidBodyBase):
     def inside_length(self: Self, value: float) -> None:
         self._inside_length = value
 
+
     @property
     def mass(self: Self) -> float:
         """Shackle mass."""
@@ -340,10 +326,12 @@ class Shackle(RigidBodyBase):
     def mass(self: Self, value: float) -> None:
         self._mass = value
 
+
     @property
     def cog(self: Self) -> float:
         """Shackle CoG. Not provided in catalogues - set to reasonable value."""
         return self._pin_ap_position + np.array([0, 0, 1]) * 0.5 * self.inside_length
+
 
     @property
     def sub_type(self: Self) -> float:
@@ -354,35 +342,16 @@ class Shackle(RigidBodyBase):
     def sub_type(self: Self, value: str) -> None:
         self._sub_type = value
 
-    def _stl_to_shackle_rotation(self):
+
+    def _stl_to_shackle_rotation(self: Self) -> np.array(3):
         # e.g. STL has pin along Z → rotate to X
         return np.eye(3)
 
 
-    def _stl_to_shackle_offset(self):
+    def _stl_to_shackle_offset(self: Self) -> np.array(3):
         # shift STL origin to pin center
         return np.array([0, 0, 0]) * ureg.meters
 
-
-#    @property
-#    def bow_inside_diameter(self: Self) -> float:
-#        """Shackle inside diameter."""
-#        return self.shackle_properties["bow inside diameter [mm]"] / 1000
-
-#    @property
-#    def inside_width(self: Self) -> float:
-#        """Shackle inside width."""
-#        return self.shackle_properties["inside width [mm]"] / 1000
-
-#    @property
-#    def visual(self: Self) -> str:
-#        """Shackle graphics."""
-#        return self.shackle_properties["visual"]
-
-#    @property
-#    def description(self: Self) -> str:
-#        """Shackle description."""
-#        return self.shackle_properties["Description"]
 
     @property
     def _visual_scale(self: Self) -> str:
@@ -423,27 +392,29 @@ class BaseAdapter:
 
     registry = []
 
-    def __init_subclass__(cls):
+    def __init_subclass__(cls) -> None:
+        """Add adapter's contribution to library."""
         BaseAdapter.registry.append(cls)
 
-    def __init__(self, resource_path: str, filename: str):
+    def __init__(self: Self, resource_path: str, filename: str) -> None:
+        """Initialize."""
         self.resource_path = resource_path
         self.filename = filename
 
-    def load(self):
-        """Main entry point: returns list of canonical objects."""
+    def load(self: Self) -> list:
+        """Parse csv and return list of loaded items."""
         rows = self._read_csv()
         return [self.map_row(row) for row in rows]
 
-    def _read_csv(self):
-        """Generic CSV loader."""
+    def _read_csv(self: Self) -> list:
+        """Load CSV."""
         path = Path(self.resource_path).joinpath(self.filename)
 
         with path.open("r", newline="") as f:
             reader = csv.DictReader(f, delimiter=";")
             return list(reader)
 
-    def map_row(self, row: dict):
+    def map_row(self: Self, row: dict) -> None:
         """To be implemented by subclasses."""
         raise NotImplementedError
 
@@ -451,13 +422,15 @@ class BaseAdapter:
 class CrosbyAdapter(BaseAdapter):
     """Parse Crosby shackles - map catalogue values to class properties."""
 
-    def __init__(self):
+    def __init__(self: Self) -> None:
+        """Initialize."""
         super().__init__(
             resource_path = "lift_solver/data/shackles",
             filename = "crosby_shackles.csv",
         )
 
-    def map_row(self, row: dict):
+    def map_row(self, row: dict) -> Shackle:
+        """Instantiate a shackle based on an entry from Crosby."""
         # Wide body shackles
         bow_diameter = row["J [mm]"]
         bow_diameter = float(bow_diameter) if bow_diameter else float(float(row["D [mm]"]))
@@ -476,13 +449,16 @@ class CrosbyAdapter(BaseAdapter):
 
 class GnAdapter(BaseAdapter):
     """Parse GN shackles - map catalogue values to class properties."""
-    def __init__(self):
+
+    def __init__(self: Self) -> None:
+        """Initialize."""
         super().__init__(
             resource_path = "lift_solver/data/shackles",
             filename = "gn_shackles.csv",
         )
 
-    def map_row(self, row: dict):
+    def map_row(self: Self, row: dict) -> Shackle:
+        """Instantiate a shackle based on an entry from GN."""
         # Wide body shackles
         bow_diameter = row["G [mm]"]
         bow_diameter = float(bow_diameter) if bow_diameter else float(float(row["A [mm]"]))
@@ -501,13 +477,16 @@ class GnAdapter(BaseAdapter):
 
 class GreenPinAdapter(BaseAdapter):
     """Parse GreenPin shackles - map catalogue values to class properties."""
-    def __init__(self):
+
+    def __init__(self: Self) -> None:
+        """Initialize."""
         super().__init__(
             resource_path = "lift_solver/data/shackles",
             filename = "gp_shackles.csv",
         )
 
-    def map_row(self, row: dict) -> Shackle:
+    def map_row(self: Self, row: dict) -> Shackle:
+        """Instantiate a shackle based on an entry from GreenPin."""
         # Wide body shackles
         bow_diameter = row["bearing surface L [mm]"]
         bow_diameter = float(bow_diameter) if bow_diameter else float(float(row["diameter body A [mm]"]))
@@ -525,12 +504,15 @@ class GreenPinAdapter(BaseAdapter):
 
 
 class ShackleLibrary:
+    """Class to hold shackle library."""
 
-    def __init__(self):
+    def __init__(self: Self) -> None:
+        """Initialize library."""
         self._data = {}
         self._is_loaded = False
 
-    def load(self):
+    def load(self: Self) -> None:
+        """Load library."""
         if self._is_loaded:
             return
 
@@ -541,10 +523,12 @@ class ShackleLibrary:
 
         self._is_loaded = True
 
-    def add(self, shackle: Shackle):
+    def add(self: Self, shackle: Shackle) -> None:
+        """Add a shackle to the library."""
         self._data[shackle.model] = shackle
 
-    def get(self, model: str) -> Shackle:
+    def get(self: Self, model: str) -> Shackle:
+        """Get a shackle from the library based on model."""
         if not self._is_loaded:
             self.load()
 

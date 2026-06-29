@@ -1,24 +1,25 @@
+"""Module for handling a single lift problem."""
 import logging
 from collections.abc import Mapping, Sequence
+from typing import Self
 
-import numpy as np
 import pint
-# import simplejson
 import yaml
 
-from . import Q_, ureg
+from . import Q_
+from .constraint import GenericJoint, World
 from .rigid_body import RigidBody
 from .shackle import Shackle
 from .sling import Sling
-from .constraint import GenericJoint, World
 
 logger = logging.getLogger(__name__)
 
 
-class LiftProblem():
+class LiftProblem:
     """Data related to a single lift problem."""
 
-    def __init__(self):
+    def __init__(self: Self) -> None:
+        """Initialize an empty lift problem."""
         self.objects = {}               # Rigid bodies (including shackles)
         self.attachment_points = {}     # All attachment points
         self.connections = {}           # Pin joints, etc.
@@ -27,7 +28,7 @@ class LiftProblem():
         self.world = World()
 
 
-    def from_yaml(self, text: str):
+    def from_yaml(self: Self, text: str) -> "LiftProblem":
         """Parse the provided text as yaml-input, and build the lift problem to be solved."""
         # Keep a copy of the provided data
         self._raw = yaml.load(text, Loader=yaml.SafeLoader)
@@ -44,7 +45,8 @@ class LiftProblem():
             return self
 
 
-    def from_dict(self, problem: dict):
+    def from_dict(self: Self, problem: dict) -> None:
+        """Parse a dict into a lift problem."""
         # Set up environment
         self.g = problem["environment"]["gravity"]
 
@@ -73,7 +75,7 @@ class LiftProblem():
                 self.add_constraint(constraint)
 
 
-    def add_body(self, body: dict):
+    def add_body(self: Self, body: dict) -> None:
         """Add a body to the lift problem with the properties given by 'body'."""
         bdy = RigidBody(body["id"])
         bdy.from_dict(body)
@@ -87,7 +89,7 @@ class LiftProblem():
         return bdy
 
 
-    def add_shackle(self, shackle: dict):
+    def add_shackle(self: Self, shackle: dict) -> None:
         """Add a shackle to the lift problem with the properties given by 'shackle'."""
         sh = Shackle().from_model(shackle["id"], shackle["model"])
 
@@ -108,7 +110,8 @@ class LiftProblem():
         if rotation_about_pin:
             sh.rotation_about_pin = rotation_about_pin
 
-        # If shackle pose was provided, use that - note either position is derived from pin_connnection and optional pin_rotation, or pose
+        # If shackle pose was provided, use that: Note either position is derived from pin_connnection
+        #  and optional pin_rotation, or pose.
         pose = shackle.get("pose")
         if pose:
             sh.set_pose(pose.get("position"), pose.get("orientation"))
@@ -116,7 +119,7 @@ class LiftProblem():
         return sh
 
 
-    def add_sling(self, sling: dict):
+    def add_sling(self: Self, sling: dict) -> None:
         """Add a sling to the lift problem with the properties given by 'sling'."""
         sl = Sling(**sling)
 
@@ -128,7 +131,7 @@ class LiftProblem():
         self.rigging[sl.id] = sl
 
 
-    def add_constraint(self, constraint: dict):
+    def add_constraint(self: Self, constraint: dict) -> None:
         """Add a constraint to the lift problem with the properties give by 'constraint'."""
         cn = GenericJoint(**constraint)
 
@@ -141,15 +144,14 @@ class LiftProblem():
         self.connections[cn.id] = cn
 
 
-    def normalize_units(self, obj):
+    def normalize_units(self: Self, obj: object) -> object:
         """Recursively convert YAML-loaded structure into Pint quantities."""
-
         # --- dict ---
         if isinstance(obj, Mapping):
             return {k: self.normalize_units(v) for k, v in obj.items()}
 
         # --- list / tuple ---
-        elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
+        elif isinstance(obj, Sequence) and not isinstance(obj, str | bytes):
             # detect if this is a vector (flat numeric list)
             if all(self.is_scalar(v) for v in obj):
                 return self.parse_vector(obj)
@@ -167,14 +169,15 @@ class LiftProblem():
             return obj
 
 
-    def parse_quantity(self, value):
-        """Convert YAML value into a Pint Quantity."""
+    def parse_quantity(self: Self, value: str) -> pint.Quantity:
+        """Convert a str into a Pint Quantity."""
         if isinstance(value, str):
             return Q_(value)
         return value
 
 
-    def parse_vector(self, vec):
+    def parse_vector(self: Self, vec: list) -> pint.Quantity:
+        """Convert a list of quantities into a quantity of a numpy array."""
         lst = [self.parse_quantity(v) for v in vec]
         try:
             return Q_.from_list(lst)
@@ -182,13 +185,7 @@ class LiftProblem():
             return lst
 
 
-    def is_scalar(self, value):
-        return isinstance(value, (int, float, str))
+    def is_scalar(self: Self, value: object) -> bool:
+        """Check of 'value' is an int | float | str."""
+        return isinstance(value, int | float | str)
 
-
-#    def positions_equal(self, a, b, tol=1e-9):
-#        return np.allclose(
-#            a.to("meter").magnitude,
-#            b.to("meter").magnitude,
-#            atol = tol,
-#        )

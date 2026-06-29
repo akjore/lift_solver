@@ -1,3 +1,4 @@
+"""Init file."""
 from pint import UnitRegistry
 
 ureg = UnitRegistry()

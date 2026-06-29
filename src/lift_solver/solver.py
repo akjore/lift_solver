@@ -10,7 +10,7 @@ from .shackle import Shackle
 from .rigid_body import RigidBody
 from .sling import Sling
 from .attachment_point import AttachmentPoint
-from .constraint import World
+from .constraint import World, PinConstraint
 
 from . import ureg, Q_
 # Exudyn units: SI
@@ -81,15 +81,15 @@ def setup_from_problem(ground, problem):
             setup_body(mbs, g, o)
 
 
-            p_pin = o.pin.global_position()
-            axis = o.pin.global_axis()
+#            p_pin = o.pin.global_position()
+#            axis = o.pin.global_axis()
 
-            p_bow = o.bow.global_position()
+#            p_bow = o.bow.global_position()
 
-            # distance from axis:
-            d = np.linalg.norm(np.cross(p_bow - p_pin, axis))
+#            # distance from axis:
+#            d = np.linalg.norm(np.cross(p_bow - p_pin, axis))
 
-            print(o.id, d)
+#            print(o.id, d)
 
 
         else:
@@ -111,9 +111,8 @@ def setup_body(mbs, g: np.array, body: RigidBody):
     position = body.global_position().to("m").magnitude
     orientation = body.global_rotation()
 
-#    length = 100
-#    width = 100
-#    height = 100
+    # TODO: Inertia hard-coded - if realistic dynamic simulations are required this should be improved by
+    # e.g. letting user specify in yaml.
     length = 1
     width = 1
     height = 1
@@ -320,8 +319,23 @@ def setup_constraint(mbs, ground, constraint):
         )
         return m
 
+
+    if isinstance(constraint, PinConstraint):
+        return create_pin_constraint(mbs, ground, constraint)
+
+    else:
+        return setup_generic_constraint(mbs, ground, constraint)
+
     ap1 = constraint.ap1
     ap2 = constraint.ap2
+
+    # temp only
+    print()
+    print(f"constraint: {constraint}")
+    print(f"aps: {ap1.id}, {ap2.id}")
+    print(f"axis_local: {ap1.axis_local}, {ap2.axis_local}")
+    # end temp only
+
 
 
     marker_numbers = []
@@ -361,6 +375,7 @@ def setup_constraint(mbs, ground, constraint):
         )
 
 
+
 #    if isinstance(ap1.parent, Shackle):
 #        mbs.AddObject(exu.utilities.TorsionalSpringDamper(
 #            markerNumbers = marker_numbers,
@@ -368,7 +383,113 @@ def setup_constraint(mbs, ground, constraint):
 #            damping = 0.0
 #        ))
 
+def create_pin_constraint(mbs, ground, constraint):
 
+    ap1 = constraint.ap1
+    ap2 = constraint.ap2
+
+    def get_body(ap):
+        if isinstance(ap, World):
+            return ground
+        return mbs.GetObjectNumber(ap.parent.id)
+
+    body1 = get_body(ap1)
+    body2 = get_body(ap2)
+
+    # --- position (global) ---
+    p1 = ap1.global_position().to("m").magnitude
+    p2 = ap2.global_position().to("m").magnitude
+
+    # robust single position
+    p_joint = 0.5 * (p1 + p2)
+
+    # --- axis selection ---
+    axis1 = ap1.global_axis() if ap1.axis_local is not None else None
+    axis2 = ap2.global_axis() if ap2.axis_local is not None else None
+
+    if axis1 is not None and axis2 is not None:
+        a1 = axis1 / np.linalg.norm(axis1)
+        a2 = axis2 / np.linalg.norm(axis2)
+
+        dot = np.dot(a1, a2)
+        if abs(dot) < 0.999:
+            raise ValueError(
+                f"PinConstraint {constraint.id}: axes not aligned (dot={dot})"
+            )
+
+        axis = a1  # deterministic
+
+    elif axis1 is not None:
+        axis = axis1 / np.linalg.norm(axis1)
+
+    elif axis2 is not None:
+        axis = axis2 / np.linalg.norm(axis2)
+
+    else:
+        raise ValueError(
+            f"PinConstraint {constraint.id}: no axis defined"
+        )
+
+    return mbs.CreateRevoluteJoint(
+        bodyNumbers = [body1, body2],
+        position = p_joint,
+        axis = axis,
+        useGlobalFrame = True,
+    )
+
+
+def setup_generic_constraint(mbs, ground, constraint):
+    def create_marker(ground: int, parent: str, ap: AttachmentPoint):
+        m = mbs.AddMarker(
+            exu.utilities.MarkerBodyRigid(
+                name = parent + "." + ap.id,
+                bodyNumber = ground,
+                localPosition = ap.global_position().to("m").magnitude,
+                visualization = exu.utilities.VMarkerBodyRigid(),
+            ),
+        )
+        return m
+
+    ap1 = constraint.ap1
+    ap2 = constraint.ap2
+
+    marker_numbers = []
+    this_marker = [ap1, ap2]
+    other_marker = [ap2, ap1]
+    for this_ap, other_ap in zip(this_marker, other_marker):
+        if isinstance(this_ap, World):
+            m = create_marker(ground, ap1.id, other_ap)
+        else:
+            m = mbs.GetMarkerNumber(this_ap.id)
+
+        marker_numbers.append(m)
+#        marker_numbers.append(get_marker(mbs, ground, this_ap))
+
+    joint = mbs.AddObject(
+        exu.utilities.GenericJoint(
+            markerNumbers = marker_numbers,
+            constrainedAxes = constraint.constraints,
+            visualization = exu.utilities.VGenericJoint(
+                show = True,
+                axesRadius = 0.2,
+                axesLength = 0.2,
+            )
+        )
+    )
+
+
+#def get_marker(mbs, ground, ap):
+#    if isinstance(ap, World):
+#        return mbs.AddMarker(
+#            exu.MarkerBodyRigid(
+#                name = ap.parent + "." + ap.id,
+#                bodyNumber = ground,
+#                localPosition = ap.global_position().to("m").magnitude,
+#                visualization = exu.utilities.VMarkerBodyRigid(),
+#            )
+#        )
+#    else:
+#        return mbs.GetMarkerNumber(ap.id)
 
 
 def setup_damping(mbs, ground, problem):

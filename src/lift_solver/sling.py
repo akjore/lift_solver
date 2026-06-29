@@ -1,13 +1,13 @@
+"""Module for handling ropes, slings, and grommets."""
 import logging
 import math
 from enum import Enum
-from typing import ClassVar, Self
+from typing import Self
 
 import numpy as np
 
+from . import ureg
 from .attachment_point import AttachmentPoint
-from . import Q_, ureg
-
 
 logger = logging.getLogger(__name__)
 
@@ -20,23 +20,24 @@ class RopeKinds(Enum):
     HMPE = "High modulus polyethylene fibre"
 
 
-class Rope():
+class Rope:
     """Parent class for slings and grommets."""
 
     # Cable laid slings - single leg - diameter and WLL from NS-EN 13414-3:2003+A1:2008, Annex G.6
-    _CABLE_DIAMETER_MM = np.array([24, 27, 30, 33, 36, 39, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96, 102, 108, 114, 120, 126,
-                          132, 144, 150, 156, 162, 168, 174, 180, 192, 204, 216, 228, 240, 252, 264, 276, 288, 300,
-                          312, 336, 360, 384, 408, 432, 456, 480, 504, 528, 552, 576, 600, 624, 648, 672, 696]) * ureg.millimeter
-    _CABLE_WLL_t = np.array([3.35, 4.25, 5.5, 7, 8, 9.5, 11, 14.5, 18, 22.5, 28, 34, 41, 49, 58, 68, 79, 92, 106, 122, 139,
-                    158, 204, 230, 250, 270, 290, 315, 335, 410, 460, 510, 555, 610, 665, 720, 780, 840, 900, 970,
-                    1100, 1250, 1400, 1550, 1700, 1880, 2050, 2250, 2450, 2600, 2800, 3000, 3200, 3400, 3650, 3850]) * ureg.ton
+    _CABLE_DIAMETER_MM = np.array([24, 27, 30, 33, 36, 39, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96, 102, 108, 114, 120,
+                                   126,132, 144, 150, 156, 162, 168, 174, 180, 192, 204, 216, 228, 240, 252, 264, 276,
+                                   288, 300,312, 336, 360, 384, 408, 432, 456, 480, 504, 528, 552, 576, 600, 624, 648,
+                                   672, 696]) * ureg.millimeter
+    _CABLE_WLL_t = np.array([3.35, 4.25, 5.5, 7, 8, 9.5, 11, 14.5, 18, 22.5, 28, 34, 41, 49, 58, 68, 79, 92, 106, 122,
+                             139, 158, 204, 230, 250, 270, 290, 315, 335, 410, 460, 510, 555, 610, 665, 720, 780, 840,
+                             900, 970, 1100, 1250, 1400, 1550, 1700, 1880, 2050, 2250, 2450, 2600, 2800, 3000, 3200,
+                             3400, 3650, 3850]) * ureg.ton
     _SF = 6.33 - 0.022 * _CABLE_DIAMETER_MM.to("mm").magnitude
     _CABLE_MBL_t = _CABLE_WLL_t * _SF
 
 
     def __init__(self: Self, id: str) -> None:
         """Initialise rope object."""
-#        scene.assert_name_available(name)
         self.id = id
         self.d = 0 * ureg.millimeter
         self.ea = 0 * ureg.newton
@@ -120,14 +121,15 @@ class Rope():
 
 
 class Sling(Rope):
+    """A class representing a sling sling (eyes at either end)."""
 
     def __init__(self: Self, id: str, ap1: str | AttachmentPoint=None,
                  ap2: str | AttachmentPoint=None, diameter: float | None = None, ea: float | None=None,
                  k: float | None = None, Lultimate: float | None = None, mass: float | None = None,
                  mass_per_length: float | None = None, length_eye_a: float | None = None,
                  length_eye_b: float | None = None, length_splice_a: float | None = None,
-                 length_splice_b: float | None = None, sheaves: list = [], mbl: float | None = None,
-                 kind: RopeKinds | str = RopeKinds.IWRC, **kwargs) -> None:
+                 length_splice_b: float | None = None, sheaves: list | None = None, mbl: float | None = None,
+                 kind: RopeKinds | str = RopeKinds.IWRC, **kwargs: dict) -> None:
         """Create a sling object.
 
         mass_per_length refers to the base rope used to make the sling, i.e. is not mass/ultimate_length.
@@ -147,14 +149,14 @@ class Sling(Rope):
 
         If k is provided, the reference length is the bearing-bearing length of the sling.
         """
-
         Rope.__init__(self, id=id)
 
         self.kind = kind if isinstance(kind, RopeKinds) else RopeKinds[kind]
 
         self.end_a = ap1
         self.end_b = ap2
-        self.sheaves = sheaves
+
+        self.sheaves = sheaves if sheaves else []
 
         # Calculate sensible defaults for parameters that are not provided
         #   diameter may be estimated from mbl, or mbl from diameter
@@ -241,7 +243,6 @@ class Sling(Rope):
     @property
     def _l_body(self: Self) -> float:
         """Length of body, excluding eyes and splices."""
-
         return self.l_ultimate - self.length_eye_a - self.length_eye_b - self.length_splice_a - \
                self.length_splice_b
 
