@@ -1,0 +1,44 @@
+[build-system]
+requires = [ "setuptools>=61", "wheel", "setuptools-git-versioning", ]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.html", "*.css", "*.template"]
+
+[tool.setuptools-git-versioning]
+enabled = true
+template = "{tag}"
+dev_template = "{tag}"
+dirty_template = "{tag}"
+count_commits_from_version_file = false
+
+[tool.ruff]
+lint.select = ["E", "F", "I", "B", "UP", "SIM", "ERA", "ANN", "D", "G", "PLR"]
+lint.ignore = ["D203", "D213", "G004", "PLR2004", "PLR0913"]
+line-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["INP001", "ANN"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
+
+[project]
+name = "lift_solver"
+dynamic = ["version", "dependencies"]
+authors = [
+  { name="Arne Kristian Jore", email="akjore@outlook.com" },
+]
+description = "Solves a lifting problem through a time-domain simulation using dynamic relaxation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.urls]
+"Homepage" = "https://github.com/akjore/lift_solver"
+"Bug Tracker" = "https://github.com/akjore/lift_solver/issues"
