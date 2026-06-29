@@ -7,6 +7,10 @@ import exudyn as exu
 from exudyn import graphics
 
 from .shackle import Shackle
+from .rigid_body import RigidBody
+from .sling import Sling
+from .attachment_point import AttachmentPoint
+from .constraint import World
 
 from . import ureg, Q_
 # Exudyn units: SI
@@ -14,108 +18,234 @@ from . import ureg, Q_
 # Mass in kg
 # Lengths in m
 
-def setup_logging():
-    global logger
-
-    logger = logging.getLogger(__name__)
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+prb = None
+logger = logging.getLogger(__name__)
 
 
-def setup_body(mbs, g, body):
-    mass = Q_(body["mass"])
-    cog = Q_.from_list([Q_(param) for param in body["cog"]])
+def solve(problem, simulation_duration, time_step):
+    global SC, mbs, prb
 
-    position = Q_.from_list([Q_(param) for param in body["pose"]["position"]])
-    orientation = body["pose"]["orientation"]
+    prb = problem
 
-    offset = None
-    if "visual" in body and "offset" in body["visual"]:
-        offset = Q_.from_list([Q_(param) for param in body["visual"]["offset"]])
+    # Set up mbs
+    SC = exu.SystemContainer()
+    mbs = SC.AddSystem()
 
-    size = None
-    if "visual" in body and "size" in body["visual"]:
-        size = Q_.from_list([Q_(param) for param in body["visual"]["size"]])
+    # Create world reference system
+    ground = setup_ground(mbs)
 
-    length = 100 * ureg.meter
-    width = 100 * ureg.meter
-    height = 100 * ureg.meter
+    # Create model
+    setup_from_problem(ground, problem)
+
+    # Add damping
+    setup_damping(mbs, ground, problem)
+
+    # Add sensors
+    setup_sensors(mbs, problem)
+
+    # Solve
+    run_solver(mbs, simulation_duration=simulation_duration, time_step=time_step)
+
+    # Return results
+    get_sensor_results(mbs, problem)
+
+    max_force, max_moment, max_velocity = compute_residuals(mbs, problem.objects.values())
+    print(f"Max residual force: {max_force}")
+    print(f"Max residual moment: {max_moment}")
+    print(f"Max residual velocity: {max_velocity}")
+
+    plot_convergence(mbs, problem)
+
+
+#    times, rf, rm = compute_residual_history(mbs, problem)
+#    plot_residuals(times, rf, rm)
+
+    # For debug purposes
+#    mbs.Assemble()
+#    SC.renderer.Start()
+#    SC.renderer.DoIdleTasks()
+
+
+def setup_from_problem(ground, problem):
+    # Set up environment
+    g = problem.g.to("m/s/s").magnitude
+
+    # Need a representative mass to tune damping coefficients
+    representative_mass = (max([b.mass for b in problem.objects.values() if isinstance(b, RigidBody)]))
+
+    # Create and place the objects
+    for o in problem.objects.values():
+        if isinstance(o, RigidBody):
+            setup_body(mbs, g, o)
+        elif isinstance(o, Shackle):
+            setup_body(mbs, g, o)
+
+
+            p_pin = o.pin.global_position()
+            axis = o.pin.global_axis()
+
+            p_bow = o.bow.global_position()
+
+            # distance from axis:
+            d = np.linalg.norm(np.cross(p_bow - p_pin, axis))
+
+            print(o.id, d)
+
+
+        else:
+            print(f"Skipped {o}")
+
+    for sl in problem.rigging.values():
+        if isinstance(sl, Sling):
+            setup_sling(mbs, g, sl, representative_mass)
+
+    # Apply constraints
+    for constraint in problem.connections.values():
+        setup_constraint(mbs, ground, constraint)
+
+
+def setup_body(mbs, g: np.array, body: RigidBody):
+    mass = body.mass.to("kg").magnitude
+    cog = body.cog.to("m").magnitude
+
+    position = body.global_position().to("m").magnitude
+    orientation = body.global_rotation()
+
+#    length = 100
+#    width = 100
+#    height = 100
+    length = 1
+    width = 1
+    height = 1
     density = mass / (length * width * height)
 
     inertia = exu.utilities.InertiaCuboid(
-        density = density.to("kg/(m*m*m)").magnitude,
-        sideLengths = [length.to("m").magnitude, width.to("m").magnitude, height.to("m").magnitude],
+        density = density,
+        sideLengths = [length, width, height],
     )
 
-    # Shift the cuboid cog from 0, 0, 0 to the CoG
-    inertia = inertia.Translated(cog.to("m").magnitude)
+    # Shift the cuboid cog from [0, 0, 0] to the CoG
+    inertia = inertia.Translated(cog)
 
     # Create graphics
+    graphics_data_list = []
+    graphics_data_list.append(create_graphics(cog, body.visual))
+    graphics_data_list.append(graphics.Basis(inertia.COM(), length=0.5))
+
+    if isinstance(body, Shackle):
+        graphics_data_list.append(
+            graphics.FromSTLfile(
+                fileName = body.mesh.file,
+                color = graphics.color.steelblue,
+                density = 0.0,
+                Aoff = body.mesh.rotation,
+                pOff = body.mesh.translation.to("m").magnitude,
+                scale = body.mesh.scale.magnitude,
+            )
+        )
+
+    # Create the body
+    body_number = mbs.CreateRigidBody(
+        name = body.id,
+        inertia = inertia,
+        gravity = g,
+        referencePosition = position,
+        referenceRotationMatrix = orientation,
+        graphicsDataList = graphics_data_list,
+    )
+
+    for att in body.attachment_points.values():
+        m = setup_attachment_point(body_number=body_number, attachment_point=att)
+
+
+def setup_sling(mbs, g, sling, representative_mass):
+    ea = sling.ea.to("N").magnitude
+    d = sling.diameter.to("m").magnitude
+    l_ultimate = sling.l_ultimate.to("m").magnitude
+
+    color = graphics.color.lawngreen
+
+    damping_fac = compute_rope_damping(ea, l_ultimate, representative_mass.to("kg").magnitude)
+
+    # Prepare list of marker numbers
+    markers = [
+        mbs.GetMarkerNumber(sling.end_a.id),
+        mbs.GetMarkerNumber(sling.end_b.id)
+    ]
+
+    sheave_axes = exu.Vector3DList()
+    r_roll_arm = []
+
+    # dummy data
+    for marker in markers:
+        r_roll_arm.append(0)
+        sheave_axes.Append([1, 0, 0])
+
+    sl = mbs.AddObject(
+        exu.utilities.ReevingSystemSprings(
+            name = sling.id,
+            markerNumbers = markers,
+            hasCoordinateMarkers = False,
+            stiffnessPerLength = ea,
+            dampingPerLength = damping_fac * ea,
+            referenceLength = l_ultimate,
+            dampingTorsional = 0.0,
+            dampingShear = 0.0,
+            sheavesAxes = sheave_axes,
+            sheavesRadii = r_roll_arm,
+            visualization = exu.utilities.VReevingSystemSprings(
+                ropeRadius = d/2,
+                color = color
+            ),
+        ),
+    )
+
+
+def setup_attachment_point(body_number: int, attachment_point: AttachmentPoint):
+    m = mbs.AddMarker(
+        exu.utilities.MarkerBodyRigid(
+            name = attachment_point.id,
+            bodyNumber = body_number,
+            localPosition = attachment_point.position_local.to("m").magnitude,
+            visualization = exu.utilities.VMarkerBodyRigid(),
+        ),
+    )
+    return m
+
+
+def create_graphics(cog: np.array, visual: dict):
     gr = None
-    if "visual" in body:
-        if body["visual"]["type"] == "box":
+    if visual:
+        if visual.get("type") == "box":
             gr = graphics.Brick(
-                centerPoint = offset.to("m").magnitude,
-                size = size.to("m").magnitude,
+                centerPoint = cog + visual["offset"].to("m").magnitude,
+                size = visual["size"].to("m").magnitude,
                 addNormals = False,
                 addEdges = True,
                 addFaces = False,
                 roundness = 0,
                 nTiles = 12,
             )
-        elif body["visual"]["type"] == "cylinder":
-            if body["visual"]["axis"] == "x":
+
+        if visual.get("type") == "cylinder":
+            if visual.get("axis") == "x":
                 ax = [1, 0, 0]
-            elif body["visual"]["axis"] == "y":
+            elif visual.get("axis") == "y":
                 ax = [0, 1, 0]
             else:
                 ax = [0, 0, 1]
 
-            p1 = np.array(ax) * body["visual"]["length"]/2
+            p1 = np.array(ax) * visual.get("length")/2
             p2 = -p1
 
             gr = graphics.Tube(
                 points = [p1, p2],
                 axes = [ax, ax],
-                radius = body["visual"]["diameter"]/2,
+                radius = visual["diameter"]/2,
                 nTiles = 16
             )
 
-    graphics_data_list = [gr, graphics.Basis(inertia.COM(), length=0.5)]
-
-    # Create the body
-    mx = exu.utilities.RotationMatrixX(math.radians(orientation[0]))
-    my = exu.utilities.RotationMatrixY(math.radians(orientation[1]))
-    mz = exu.utilities.RotationMatrixZ(math.radians(orientation[2]))
-    referenceRotationMatrix = (mx @ my) @ mz
-
-    body_number = mbs.CreateRigidBody(
-        name = body["id"],
-        inertia = inertia,
-        referencePosition = position.to("m").magnitude,
-        gravity = g.to("m/s**2").magnitude,
-        referenceRotationMatrix = referenceRotationMatrix,
-        graphicsDataList = graphics_data_list,
-    )
-
-    # Add markers for each of the PoIs
-    for p_name, p_coord in body["points"].items():
-        p = Q_.from_list([Q_(param) for param in p_coord])
-        m = mbs.AddMarker(
-            exu.utilities.MarkerBodyRigid(
-                name = body["id"] + "." + p_name,
-                bodyNumber = body_number,
-#                localPosition = p_coord,
-                localPosition = p.to("m").magnitude,
-                visualization = exu.utilities.VMarkerBodyRigid()
-            ),
-        )
-
-
-def setup_shackle(mbs, g, shackle):
-    """Add shackle to problem."""
-    sh = Shackle.from_model(shackle["id"], shackle["model"])
-    sh.connect_pin_to(shackle["pin_connection"])
-    assert 1 == 2
+    return gr
 
 
 def compute_rope_damping(EA, L0, mass, safety_factor=0.8):
@@ -139,77 +269,6 @@ def compute_rope_damping(EA, L0, mass, safety_factor=0.8):
     return damping_rope_fac
 
 
-# def setup_sling(mbs, g, sling, mass, damping_rope_fac=0.2, damping_rope_torsional_fac=0*1e-4, damping_rope_shear_fac=0*1e-4):
-def setup_sling(mbs, g, sling, representative_mass):
-    EA = sling.get("EA", None)
-    k = sling.get("k", None)
-    d = Q_(sling["d"])
-    L0 = Q_(sling["L0"])
-    from_m = sling["from"]
-    to_m = sling["to"]
-
-    color = graphics.color.lawngreen
-
-    EA_prime = next((item for item in [EA, Q_(k)*L0] if item is not None))
-    EA_prime = Q_(EA_prime)
-    damping_fac = compute_rope_damping(EA_prime, L0, representative_mass)
-
-    # Prepare list of marker numbers
-    markers = [
-        mbs.GetMarkerNumber(from_m),
-        mbs.GetMarkerNumber(to_m)
-    ]
-
-    sheave_axes = exu.Vector3DList()
-    r_roll_arm = []
-
-    # dummy data
-    for marker in markers:
-        r_roll_arm.append(0)
-        sheave_axes.Append([1, 0, 0])
-
-
-    sl = mbs.AddObject(
-        exu.utilities.ReevingSystemSprings(
-            name = sling["id"],
-            markerNumbers = markers,
-            hasCoordinateMarkers = False,
-#            coordinateFactors = coordinate_factors,
-#            coordinateFactors = [1,1],           # don't really know what this does (?)
-#            stiffnessPerLength = k,          # input isn't k=EA/L0, but EA in N
-            stiffnessPerLength = EA_prime.to("N").magnitude,
-            dampingPerLength = (damping_fac * EA_prime).magnitude,      # check unit!
-            referenceLength = L0.to("m").magnitude,
-            dampingTorsional = 0.0,
-            dampingShear = 0.0,
-            sheavesAxes = sheave_axes,
-            sheavesRadii = r_roll_arm,
-            visualization = exu.utilities.VReevingSystemSprings(
-                ropeRadius = d.to("m").magnitude/2,
-                color = color
-            ),
-        ),
-    )
-
-
-
-#        return self._mbs.GetObjectOutputBody(
-#            self.body_number,
-#            exu.OutputVariableType.RotationMatrix,
-#            localPosition=[0, 0, 0],
-#            configuration=exu.ConfigurationType.Reference,
-#        ).reshape(3, 3)
-
-#        shackle_node_no = mbs.GetObject(self.body_number)["nodeNumber"]
-
-#point = mbs.GetObjectOutputBody(
-#    ocranehouse,
-#    exu.OutputVariableType.Position,
-#    localPosition=cranehouse_centre_of_bearing,
-#    configuration=exu.ConfigurationType.Reference,
-#    )
-#print(mbs.GetObject(mbs.GetObjectNumber("LP1")))
-
 def setup_ground(mbs):
     g_ground = graphics.CheckerBoard(point=[0,0,0], normal = [0,0,1], size=60, nTiles=12)
     ground = mbs.AddObject(
@@ -222,65 +281,103 @@ def setup_ground(mbs):
     return ground
 
 
-def get_global_marker_position(mbs, marker_num):
-    # Get the marker properties; body and local position on body
-    m = mbs.GetMarker(marker_num)
+#def get_global_marker_position(mbs, marker_num):
+#    # Get the marker properties; body and local position on body
+#    m = mbs.GetMarker(marker_num)
 
-    # Return the global position of that local position
-    return mbs.GetObjectOutputBody(
-        m["bodyNumber"],
-        exu.OutputVariableType.Position,
-        localPosition = m["localPosition"],
-        configuration = exu.ConfigurationType.Reference,
-    )
+#    # Return the global position of that local position
+#    return mbs.GetObjectOutputBody(
+#        m["bodyNumber"],
+#        exu.OutputVariableType.Position,
+#        localPosition = m["localPosition"],
+#        configuration = exu.ConfigurationType.Reference,
+#    )
 
-
-def get_global_position(mbs, body, local_position):
-    """Return the global position of local_position on body 'body'."""
-
-    return mbs.GetObjectOutputBody(
-        body,
-        exu.OutputVariableType.Position,
-        localPosition = local_position,
-        configuration = exu.ConfigurationType.Reference,
-    )
+#def get_marker(mbs, ground, ap):
+#
+#    if isinstance(ap, World):
+#        return mbs.AddMarker(
+#            exu.MarkerBodyRigid(
+#                name = parent + "." + ap.id,
+#                bodyNumber = ground,
+#                localPosition = ap.global_position().to("m").magnitude
+#                visualization = exu.utilities.VMarkerBodyRigid(),
+#            )
+#        )
+#    else:
+#        return mbs.GetMarkerNumber(ap.id)
 
 
 def setup_constraint(mbs, ground, constraint):
-    body = constraint["body"]
-    point = constraint["point"]
-    constraints = constraint["constraints"]
-
-    m = body + "." + point
-    m_num = mbs.GetMarkerNumber(m)
-    m_pos = get_global_marker_position(mbs, m_num)
-
-    m_ground = mbs.AddMarker(
-        exu.utilities.MarkerBodyRigid(
-            bodyNumber = ground,
-            localPosition = m_pos,
+    def create_marker(ground: int, parent: str, ap: AttachmentPoint):
+        m = mbs.AddMarker(
+            exu.utilities.MarkerBodyRigid(
+                name = parent + "." + ap.id,
+                bodyNumber = ground,
+                localPosition = ap.global_position().to("m").magnitude,
+                visualization = exu.utilities.VMarkerBodyRigid(),
+            ),
         )
-    )
+        return m
 
-    joint = mbs.AddObject(
-        exu.utilities.GenericJoint(
-            markerNumbers = [m_ground, m_num],
-            constrainedAxes = constraints,
-            visualization = exu.utilities.VGenericJoint(
-                axesRadius = 0.5,
-                axesLength = 0.5
+    ap1 = constraint.ap1
+    ap2 = constraint.ap2
+
+
+    marker_numbers = []
+    this_marker = [ap1, ap2]
+    other_marker = [ap2, ap1]
+    for this_ap, other_ap in zip(this_marker, other_marker):
+        if isinstance(this_ap, World):
+            m = create_marker(ground, ap1.id, other_ap)
+        else:
+            m = mbs.GetMarkerNumber(this_ap.id)
+
+        marker_numbers.append(m)
+
+    # testing
+    if (not isinstance(ap1, World)) and (not isinstance(ap2, World)) and (isinstance(ap1.parent, Shackle) or isinstance(ap2.parent, Shackle)):
+       m1 = mbs.GetMarker(marker_numbers[0])
+       m2 = mbs.GetMarker(marker_numbers[1])
+       mbs.CreateRevoluteJoint(
+            bodyNumbers = [m1["bodyNumber"], m2["bodyNumber"]],
+            position = [0, 0, 0],
+            axis = [1, 0, 0],
+            useGlobalFrame = False,
+            axisRadius = 0.35/2,
+            axisLength = 1,
+        )
+    else:
+        joint = mbs.AddObject(
+            exu.utilities.GenericJoint(
+                markerNumbers = marker_numbers,
+                constrainedAxes = constraint.constraints,
+                visualization = exu.utilities.VGenericJoint(
+                    show = True,
+                    axesRadius = 0.2,
+                    axesLength = 0.2,
+                )
             )
         )
-    )
+
+
+#    if isinstance(ap1.parent, Shackle):
+#        mbs.AddObject(exu.utilities.TorsionalSpringDamper(
+#            markerNumbers = marker_numbers,
+#            stiffness = 1.0,
+#            damping = 0.0
+#        ))
+
+
 
 
 def setup_damping(mbs, ground, problem):
     """Add damping to quell body movements."""
 
     # For each body, add a damper between body and ground
-    for body in problem["bodies"]:
+    for body in problem.objects.values():
         # Get body number from name
-        b = mbs.GetObjectNumber(body["id"])
+        b = mbs.GetObjectNumber(body.id)
 
         # Get local and global position of CoG
         o = mbs.GetObject(b)
@@ -321,16 +418,29 @@ def setup_damping(mbs, ground, problem):
 #        )
 
 
+def get_global_position(mbs, body, local_position):
+    """Return the global position of local_position on body 'body'."""
+
+    return mbs.GetObjectOutputBody(
+        body,
+        exu.OutputVariableType.Position,
+        localPosition = local_position,
+        configuration = exu.ConfigurationType.Reference,
+    )
+
+
 def setup_sensors(mbs, problem):
     """Specify sensors."""
 
-    for body in problem["bodies"]:
-        b = mbs.GetObjectNumber(body["id"])
+#    for body in problem["bodies"]:
+    for body in problem.objects.values():
+        b = mbs.GetObjectNumber(body.id)
         o = mbs.GetObject(b)
+        id = body.id
 
         sensor_pos = mbs.AddSensor(
             exu.utilities.SensorBody(
-                name = body["id"] + ".position",
+                name = id + ".position",
                 bodyNumber = b,
                 localPosition = o["physicsCenterOfMass"],
                 storeInternal = True,
@@ -340,7 +450,7 @@ def setup_sensors(mbs, problem):
 
         sensor_pos = mbs.AddSensor(
             exu.utilities.SensorBody(
-                name = body["id"] + ".displacement",
+                name = id + ".displacement",
                 bodyNumber = b,
                 localPosition = o["physicsCenterOfMass"],
                 storeInternal = True,
@@ -350,7 +460,7 @@ def setup_sensors(mbs, problem):
 
         sensor_pos = mbs.AddSensor(
             exu.utilities.SensorBody(
-                name = body["id"] + ".rotation",
+                name = id + ".rotation",
                 bodyNumber = b,
                 localPosition = o["physicsCenterOfMass"],
                 storeInternal = True,
@@ -360,7 +470,7 @@ def setup_sensors(mbs, problem):
 
         sensor_vel = mbs.AddSensor(
             exu.utilities.SensorBody(
-                name = body["id"] + ".velocity",
+                name = id + ".velocity",
                 bodyNumber = b,
                 localPosition = o["physicsCenterOfMass"],
                 storeInternal = True,
@@ -370,7 +480,7 @@ def setup_sensors(mbs, problem):
 
         sensor_acc = mbs.AddSensor(
             exu.utilities.SensorBody(
-                name = body["id"] + ".acceleration",
+                name = id + ".acceleration",
                 bodyNumber = b,
                 localPosition = o["physicsCenterOfMass"],
                 storeInternal = True,
@@ -378,14 +488,14 @@ def setup_sensors(mbs, problem):
             )
         )
 
-        sensor_rotmat = mbs.AddSensor(
-            exu.utilities.SensorBody(
-                name = body["id"] + ".rotationMatrix",
-                bodyNumber = b,
-                outputVariableType = exu.OutputVariableType.RotationMatrix,
-                storeInternal = True,
-            )
-        )
+#        sensor_rotmat = mbs.AddSensor(
+#            exu.utilities.SensorBody(
+#                name = id + ".rotationMatrix",
+#                bodyNumber = b,
+#                outputVariableType = exu.OutputVariableType.RotationMatrix,
+#                storeInternal = True,
+#            )
+#        )
 
 #        sensor_f = mbs.AddSensor(
 #            exu.utilities.SensorBody(
@@ -397,11 +507,12 @@ def setup_sensors(mbs, problem):
 #            )
 #        )
 
-    for sling in problem["elements"]:
-        s = mbs.GetObjectNumber(sling["id"])
+    for sling in problem.rigging.values():
+        id = sling.id
+        s = mbs.GetObjectNumber(id)
         sensor_f = mbs.AddSensor(
             exu.utilities.SensorObject(
-                name = sling["id"] + ".force",
+                name = id + ".force",
                 objectNumber=s,
                 storeInternal=True,
                 outputVariableType=exu.OutputVariableType.ForceLocal,
@@ -417,7 +528,7 @@ def compute_residuals(mbs, bodies):
 
     for body in bodies:
         # Get named body
-        b = mbs.GetObjectNumber(body["id"])
+        b = mbs.GetObjectNumber(body.id)
         o = mbs.GetObject(b)
         n = o["nodeNumber"]
 
@@ -471,10 +582,8 @@ def get_sensor_results(mbs, problem):
         if sensor["sensorType"] == "Body" and sensor["outputVariableType"] == exu.OutputVariableType.Displacement:
             # What is the body offset - for updating .yaml file
             b = mbs.GetObject(sensor["bodyNumber"])
-            bdy = [bdy for bdy in problem["bodies"] if bdy["id"]==b["name"]][0]
-
-            ref = Q_.from_list([Q_(param) for param in bdy["pose"]["position"]])
-#            print(f"Sensor: {sensor["name"]}, position after simulation: {np.array(bdy["pose"]["position"])+mbs.GetSensorValues(sensor_number)}")
+            bdy = problem.objects[b["name"]]
+            ref = bdy.position
             print(f"Sensor: {sensor["name"]}, position after simulation: {ref+mbs.GetSensorValues(sensor_number) * ureg("m")}")
 
         if sensor["sensorType"] == "Body" and sensor["outputVariableType"] == exu.OutputVariableType.RotationMatrix:
@@ -499,37 +608,26 @@ def get_sensor_results(mbs, problem):
             print(f"Sensor: {sensor["name"]}, converted to t and including DAF=1.2 and k_skl=1.1: {mbs.GetSensorValues(sensor_number)/9.81/1000*1.2*1.1}")
 
 
-def setup_from_problem(ground, problem):
-    # Set up environment
-    g = Q_.from_list([Q_(param) for param in problem["environment"]["gravity"]])
-
-    # Create and place the bodies
-    for body in problem["bodies"]:
-        setup_body(mbs, g, body)
-
-    # Create and connect the shackles
-    for shackle in problem["shackles"]:
-        setup_shackle(mbs, g, shackle)
-
-    # Create and connect the slings. Provide mass for calculation of damping
-    representative_mass = Q_(max([b["mass"] for b in problem["bodies"]]))
-    for sling in problem["elements"]:
-        setup_sling(mbs, g, sling, representative_mass)
-
-    # Apply constraints
-    for constraint in problem["constraints"]:
-        setup_constraint(mbs, ground, constraint)
-
+STEP_INTERVAL = 10
+LOG_INTERVAL = 50
 
 def post_step_user_function(mbs, t):
 
-    f_res, m_res, v_res = compute_residuals(mbs, problem["bodies"])
+    step = mbs.sys.get("step", 0) + 1
+    mbs.sys["step"] = step
 
-    # reduce logging frequency
-    if int(t*50) % 50 == 0:
-        print(f"t={t:.2f}, v={v_res:.3e}")
+    # compute residual occasionally
+    if step % STEP_INTERVAL == 0:
+        f_res, m_res, v_res = compute_residuals(mbs, prb.objects.values())
+        mbs.sys["v_res"] = v_res
+    else:
+        v_res = mbs.sys.get("v_res", 0.0)
 
-    # ✅ adaptive damping
+    # logging
+#    if step % LOG_INTERVAL == 0:
+#        print(f"t={t:.2f}, v={v_res:.3e}")
+
+    # adaptive damping
     if v_res > 0.5:
         factor = 0.5
     elif v_res > 0.05:
@@ -537,7 +635,7 @@ def post_step_user_function(mbs, t):
     elif v_res > 0.005:
         factor = 0.1
     else:
-        factor = 0.0   # don't interfere near convergence
+        factor = 0.0
 
     if factor > 0:
         coords_t = mbs.systemData.GetODE2Coordinates_t()
@@ -548,15 +646,42 @@ def post_step_user_function(mbs, t):
 
 
 
-def terminate_user_function(mbs, t):
+#def post_step_user_function(mbs, t):
+#
+#    f_res, m_res, v_res = compute_residuals(mbs, prb.objects.values())
 
-    f_res, m_res, v_res = compute_residuals(mbs, problem["bodies"])
+    # reduce logging frequency
+#    if int(t*50) % 50 == 0:
+#        print(f"t={t:.2f}, v={v_res:.3e}")
 
-    if v_res < 1e-3 and f_res < 1e3 and m_res < 1e5:
-        print(f"✅ Converged at t={t:.2f}")
-        return True
+    # adaptive damping
+#    if v_res > 0.5:
+#        factor = 0.5
+#    elif v_res > 0.05:
+#        factor = 0.2
+#    elif v_res > 0.005:
+#        factor = 0.1
+#    else:
+#        factor = 0.0   # don't interfere near convergence
 
-    return False
+#    if factor > 0:
+#        coords_t = mbs.systemData.GetODE2Coordinates_t()
+#        coords_t *= (1 - factor)
+#        mbs.systemData.SetODE2Coordinates_t(coords_t)
+
+#    return True
+
+
+
+#def terminate_user_function(mbs, t):
+#
+#    f_res, m_res, v_res = compute_residuals(mbs, problem["bodies"])
+
+#    if v_res < 1e-3 and f_res < 1e3 and m_res < 1e5:
+#        print(f"✅ Converged at t={t:.2f}")
+#        return True
+
+#    return False
 
 
 
@@ -610,6 +735,7 @@ def run_solver(mbs, simulation_duration, time_step):
     mbs.SolveDynamic(
         simulationSettings = ss,
         updateInitialValues = True,
+        showHints = False,
     )
 
 #    coords = mbs.systemData.GetODE2Coordinates()
@@ -629,41 +755,6 @@ def run_solver(mbs, simulation_duration, time_step):
     SC.renderer.Stop()
 
 
-def solve(problem, simulation_duration=20, time_step=0.002):
-    global SC, mbs
-
-    # Set up mbs
-    SC = exu.SystemContainer()
-    mbs = SC.AddSystem()
-
-    # Create world reference system
-    ground = setup_ground(mbs)
-
-    # Create model
-    setup_from_problem(ground, problem)
-
-    # Add damping
-    setup_damping(mbs, ground, problem)
-
-    # Add sensors
-    setup_sensors(mbs, problem)
-
-    # Solve
-    run_solver(mbs, simulation_duration=simulation_duration, time_step=time_step)
-
-    # Return results
-    get_sensor_results(mbs, problem)
-
-    max_force, max_moment, max_velocity = compute_residuals(mbs, problem["bodies"])
-    print(f"Max residual force: {max_force}")
-    print(f"Max residual moment: {max_moment}")
-    print(f"Max residual velocity: {max_velocity}")
-
-    plot_convergence(mbs, problem)
-
-
-#    times, rf, rm = compute_residual_history(mbs, problem)
-#    plot_residuals(times, rf, rm)
 
 
 
@@ -798,196 +889,3 @@ def plot_residuals(times, res_f, res_m):
     plt.show()
 
 
-if __name__ == "__main__":
-    import sys
-    import yaml
-
-    setup_logging()
-
-    # Get file name from command line
-    try:
-        filename = sys.argv[1]
-    except IndexError as ex:
-        logger.error("Please provide path to yaml-file describing problem.")
-        raise ex
-
-    # Expectation is that file is in yaml format and describes problem to be solved
-    with open(filename, 'r') as file:
-#        problem = yaml.safe_load(file)
-        problem = file.read()
-
-    # Echo input
-#    logger.info(problem)
-
-    from . import lift_problem
-    prb = lift_problem.LiftProblem().from_yaml(problem)
-
-    # Set up problem
-#    setup_from_problem(problem)
-#    solve(problem)
-
-#    mbs.Assemble()
-
-#    mbs.ComputeSystemDegreeOfFreedom(verbose=True)
-
-#    SC.renderer.Start()
-#    SC.renderer.DoIdleTasks()
-
-#    simulation_settings = exu.SimulationSettings()
-#    simulation_settings.linearSolverSettings.ignoreSingularJacobian = True
-#    simulation_settings.linearSolverType = exu.LinearSolverType.EXUdense
-#    simulation_settings.linearSolverType = exu.LinearSolverType.EigenDense
-#    simulation_settings.staticSolver.loadStepGeometric = True
-#    simulation_settings.staticSolver.verboseMode = 1
-#    simulation_settings.staticSolver.numberOfLoadSteps  = 200
-#    simulation_settings.staticSolver.newton.relativeTolerance = 1e-4 # default 1e-7
-#    simulation_settings.displayStatistics = True
-#    simulation_settings.staticSolver.newton.absoluteTolerance = 1e-6 # default 1e-10
-#    simulation_settings.staticSolver.stabilizerODE2term = 200
-#    simulation_settings.staticSolver.newton.maxIterations = 10000
-##    success = mbs.SolveStatic(
-##        simulation_settings,
-##        updateInitialValues = True,
-#        showHints = True,
-##    )
-
-
-
-
-#    tEnd = 80
-#    tEnd = 300
-#    tEnd = 500
-#    h=0.001
-#    h=0.0001
-##    tEnd = 20
-#    h = 0.005
-##    h = 0.002
-
-##    solutionFile = 'solution/coordsCrane.txt'
-##    simulationSettings = exu.SimulationSettings() #takes currently set values or default values
-
-##    simulationSettings.timeIntegration.numberOfSteps = int(tEnd/h)
-##    simulationSettings.timeIntegration.endTime = tEnd
-#    simulationSettings.timeIntegration.generalizedAlpha.spectralRadius = 0.5
-##    simulationSettings.timeIntegration.generalizedAlpha.spectralRadius = 0.1
-#    simulationSettings.solutionSettings.writeSolutionToFile= True #set False for CPU performance measurement
-#    simulationSettings.solutionSettings.solutionWritePeriod= 0.2
-#    simulationSettings.solutionSettings.coordinatesSolutionFileName = solutionFile
-##    simulationSettings.solutionSettings.sensorsWritePeriod = 0.02
-    # simulationSettings.timeIntegration.simulateInRealtime=True
-    # simulationSettings.timeIntegration.realtimeFactor=5
-##    SC.visualizationSettings.general.graphicsUpdateInterval = 0.01
-##    simulationSettings.parallel.numberOfThreads=4
-##    simulationSettings.displayComputationTime = True
-
-##    simulationSettings.timeIntegration.verboseMode = 1
-
-#    simulationSettings.timeIntegration.newton.useModifiedNewton = True
-##    simulationSettings.timeIntegration.newton.useModifiedNewton = False
-
-#    if False:
-#        #traces:
-#        SC.visualizationSettings.sensors.traces.listOfPositionSensors = [sPosTCP]
-#        SC.visualizationSettings.sensors.traces.listOfTriadSensors =[sRotTCP]
-#        SC.visualizationSettings.sensors.traces.showPositionTrace=True
-#        SC.visualizationSettings.sensors.traces.showTriads=True
-##        SC.visualizationSettings.sensors.traces.triadSize=2
-#        SC.visualizationSettings.sensors.traces.showVectors=False
-#        SC.visualizationSettings.sensors.traces.showFuture=False
-#        SC.visualizationSettings.sensors.traces.triadsShowEvery=5
-
-
-#    SC.visualizationSettings.nodes.show = True
-#    SC.visualizationSettings.nodes.drawNodesAsPoint  = False
-#    SC.visualizationSettings.nodes.showBasis = True
-#    SC.visualizationSettings.nodes.basisSize = 0.2
-
-#    SC.visualizationSettings.openGL.multiSampling = 4
-#    SC.visualizationSettings.openGL.shadow = 0.3*0
-#    SC.visualizationSettings.openGL.light0position = [-50,200,100,0]
-
-#    SC.visualizationSettings.window.renderWindowSize=[1920,1200]
-    #SC.visualizationSettings.general.autoFitScene = False #use loaded render state
-
-    ## start renderer and dynamic simulation
-#    useGraphics = True
-#    if useGraphics:
-#        SC.renderer.Start()
-#        if 'renderState' in exu.sys:
-#            SC.renderer.SetState(exu.sys[ 'renderState' ])
-#        SC.renderer.DoIdleTasks()
-
-
-##    mbs.SolveDynamic(simulationSettings,
-##        #solverType=exu.DynamicSolverType.TrapezoidalIndex2 #in this case, drift shows up significantly!
-##    )
-#    solve_with_auto_stop(mbs, SC, problem)
-
-#    SC.visualizationSettings.nodes.show = True
-#    SC.visualizationSettings.nodes.drawNodesAsPoint  = False
-#    SC.visualizationSettings.nodes.showBasis = True
-#    SC.visualizationSettings.nodes.basisSize = 0.2
-
-#    SC.visualizationSettings.openGL.multiSampling = 4
-#    SC.visualizationSettings.openGL.shadow = 0.3*0
-#    SC.visualizationSettings.openGL.light0position = [-50,200,100,0]
-
-#    SC.visualizationSettings.window.renderWindowSize=[1920,1200]
-    #SC.visualizationSettings.general.autoFitScene = False #use loaded render state
-
-    ## start renderer and dynamic simulation
-#    useGraphics = True
-#    if useGraphics:
-#        SC.renderer.Start()
-#        if 'renderState' in exu.sys:
-#            SC.renderer.SetState(exu.sys[ 'renderState' ])
-#        SC.renderer.DoIdleTasks()
-
-
-#    mbs.SolveDynamic(simulationSettings,
-#                 #solverType=exu.DynamicSolverType.TrapezoidalIndex2 #in this case, drift shows up significantly!
-#    )
-
-#    mbs.SolutionViewer()
-#    SC.renderer.Stop()
-#    import matplotlib
-#    matplotlib.use("agg")      # only for non-interactive use
-#    matplotlib.use("QT5Agg")
-#    matplotlib.use("TkAgg")
-
-#    disp = mbs.GetSensorNumber("load.position")
-#    o = mbs.GetSensor(disp)
-#    mbs.PlotSensor(
-##        sensorNumbers=[disp, disp, disp],
-#        components=[0, 1, 2],
-#        labels=["displacement (m) x", "displacement (m) y", "displacement (m) z"],
-#        colorCodeOffset=0,
-#        newFigure=False,
-#        figureName="C:\\appl\\development\\lift_solver\\src\\lift_solver\\tst.png",
-#    )
-
-#    print(mbs.systemData.Info())
-#    print(o)
-#    uTip = mbs.GetSensorValues(disp)
-#    print(uTip)
-
-#    history = mbs.GetSensorStoredData(disp)
-#    print(history)
-#    for row in disp:
-#        print(row)
-
-#    sensor_vel = mbs.GetSensorNumber("load.velocity")
-#    print(mbs.GetSensorValues(sensor_vel))
-
-#    sensor_f = mbs.GetSensorNumber("load.force")
-#    print(mbs.GetSensorValues(sensor_f))
-
-#    force, moment, velocity = compute_residuals(mbs, problem["bodies"])
-#    print(f"Residual force: {force}")
-#    print(f"Residual moment: {moment}")
-#    print(f"Residual velocity: {velocity}")
-
-    #compute error for test suite: - copied from cranereeving sample
-#    sol2 = mbs.systemData.GetODE2Coordinates();
-#    u = np.linalg.norm(sol2);
-#    exu.Print('solution of craneReevingSystem=',u)

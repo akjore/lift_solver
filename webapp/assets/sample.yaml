@@ -1,127 +1,227 @@
 meta:
-  name: "Compressor A Removal"
-  units:
-    length: m
-    force: kN
-  frame: global
+  name: "WHRU A Removal"
+#  frame: global
 
 environment:
-  gravity: [0.0, 0.0, -9.81]
+  gravity: [0.0 m/s**2, 0.0m/s**2, -9.81 m/s**2]
 
 # ----------------------------------------------------------
 # Bodies
 # ----------------------------------------------------------
 bodies:
 
-  load:
-    mass: 108   # t
+  - id: load
+    mass: 57.4 t * 1.2
 
     # --- Local definition ---
-    cog: [50.562, 277.097, 550.428]
+    cog: [62.626 m, 277.228 m, 561.733 m] # Ref. dwg 104304-ASS-N-0061, x - east
 
-    points:   # ref. drawing from Nuovo Pignone
-      lp1: [46.252, 279.542, 549.398]
-      lp2: [46.252, 274.742, 549.398]
-      lp3: [53.412, 279.542, 549.398]
-      lp4: [53.412, 274.742, 549.398]
+    points:
+#      lp1: [(62.626 - 1.614) m , (277.228 + 1.838) m, (561.733 + 4.841) m]
+#      lp2: [(62.626 - 1.614) m , (277.228 - 1.997) m, (561.733 + 4.841) m]
+#      lp3: [(62.626 + 3.464) m , (277.228 + 2.096) m, (561.733 - 0.238) m]
+#      lp4: [(62.626 + 3.464) m , (277.228 - 2.184) m, (561.733 - 0.238) m]
+      - id: lp1
+        position: [(62.626 - 1.614) m , (277.228 + 1.838) m, (561.733 + 4.841) m]
+        type: hole
+        axis: [1, 0, 0]
+      - id: lp2
+        position: [(62.626 - 1.614) m , (277.228 - 1.997) m, (561.733 + 4.841) m]
+        type: hole
+        axis: [1, 0, 0]
+      - id: lp3
+        position: [(62.626 + 3.464) m , (277.228 + 2.096) m, (561.733 - 0.238) m]
+        type: hole
+        axis: [1, 0, 0]
+      - id: lp4
+        position: [(62.626 + 3.464) m , (277.228 - 2.184) m, (561.733 - 0.238) m]
+        type: hole
+        axis: [1, 0, 0]
 
     # --- Global placement ---
     pose:
-      position: [-50.562, -277.097, -550.428]
-      orientation: [0.0, 0.0, 0.0]   # Euler (for now)
+      position: [-62.626 m, -277.228 m, -561.733 m]
+#      position: [-60.0 m, -275 m, -561. m]
+#      position: [-63.17284461954304 m, -277.2192608910865 m, -559.3989726885953 m ]
+#      position: [-63.39335517601396 m, -277.21516072068005 m, -559.4115923420442 m]
+#      position: [-63.59563254520982 m, -277.21156163216756 m, -559.4351978802139 m]
+      orientation: [0.0 degree, 0.0 degree, 0.0 degree]   # Euler (for now)
 
     # --- Optional visual representation ---
     visual:
       type: box
-      size: [14.5, 4.4, 6.1]   # length, width, height
-      offset: [49.832, 277.097, 550.428]        # relative to body local origin
+      size: [(3.464 + 1.614) m, (1.997 + 1.838) m, (4.733 + 4.841) m]   # length, width, height
+      offset: [0 m, 0 m, 0 m]        # relative to CoG
       color: 0x888888
       opacity: 0.2
 
-  spreader:
-    mass: 1.2   # t
+  - id: spreader
+    mass: 1.2 t
 
     # --- Local definition ---
-    cog: [0.0, 0.0, 0.0]
+    cog: [0.0 m, 0.0 m, 0.0 m]
 
     points:
-      left_lower:  [-2.590, 0.0, -0.350]
-      left_upper:  [-2.430, 0.0,  0.350]
-      right_lower: [ 2.590, 0.0, -0.350]
-      right_upper: [ 2.430, 0.0,  0.350]
+#      left_lower:  [-2.590 m, 0.0 m, -0.350 m]
+#      left_upper:  [-2.430 m, 0.0 m,  0.350 m]
+#      right_lower: [ 2.590 m, 0.0 m, -0.350 m]
+#      right_upper: [ 2.430 m, 0.0 m,  0.350 m]
+      - id: left_lower
+        position: [-2.590 m, 0.0 m, -0.350 m]
+        axis: [0, 1, 0]
+        type: hole
+      - id: left_upper
+        position: [-2.430 m, 0.0 m,  0.350 m]
+        axis: [0, 1, 0]
+        type: hole
+      - id: right_lower
+        position: [ 2.590 m, 0.0 m, -0.350 m]
+        axis: [0, 1, 0]
+        type: hole
+      - id: right_upper
+        position: [ 2.430 m, 0.0 m,  0.350 m]
+        axis: [0, 1, 0]
+        type: hole
+      - id: test
+        position: [ 1.20 m, 0.0 m,  -0.350 m]
+        axis: [0, -1, 0]
+        type: hole
 
     # --- Global placement ---
     pose:
-      position: [0.0, 0.0, 10.0]
-      orientation: [0.0, 0.0, -90.0]
+      position: [0.0 m, 0.0 m, 15.0 m]
+#      position: [1.7763484973045847 m, -0.011893427691721484 m, 11.112420533563558 m]
+#      position: [1.6445347596122633 m, -0.010194646759313716 m, 11.096047536455334 m]
+#      position: [1.5212092824817596 m, -0.009048508454245853 m, 11.081645782741267 m]
+      orientation: [0.0 degree, 0.0 degree, -90.0 degree]
 
     # --- Optional visual representation ---
     visual:
       type: cylinder
-      radius: 0.15
+      diameter: 0.3239
       length: 5.680
       axis: x       # important for orientation
       color: 0x0066cc
 
-  hook:
-    mass: 0
+  - id: hook
+    mass: 0 t
 
-    cog: [0.0, 0.0, 0.0]
+    cog: [0.0 m, 0.0 m, 0.0 m]
 
     points:
-      hook: [0.0, 0.0, 0.0]
+#      hook: [0.0 m, 0.0 m, 0.0 m]
+#      socket: [0.0 m, 0.0 m, 1.0 m]
+      - id: hook
+        position: [0.0 m, 0.0 m, 0.0 m]
+#        axis: [0, 1, 0]
+#        type: pin
+      - id: socket
+        position: [0.0 m, 0.0 m, 1.0 m]
 
     pose:
-      position: [0.0, 0.0, 25.0]
-      orientation: [0.0, 0.0, 0.0]
+      position: [0.0 m, 0.0 m, 25.0 m]
+      orientation: [0.0 degree, 0.0 degree, 0.0 degree]
+
+# ----------------------------------------------------------
+# Shackles
+# ----------------------------------------------------------
+shackles:
+  - id: sh1
+    model: GP55
+    pin_connection: spreader.left_upper
+
+  - id: sh2
+    model: GP55
+    pin_connection: spreader.right_upper
+
+  - id: sh3
+    model: GP55
+
+    pose:
+      position: [1.0 m, 2.0 m, 10.0 m]
+      orientation: [0 deg, 0 deg, 0 deg]
+
+  - id: sh4
+    model: GP55
+    pin_connection: spreader.test
+    rotation_about_pin: 45 deg
 
 # ----------------------------------------------------------
 # Elements
+# Note:
+# Hooke's law gives F = k * dL = (EA / L0) * dL
+# Below, either specify k or EA
 # ----------------------------------------------------------
 elements:
 
   - id: SL1
-    from: load.lp1
-    to:   spreader.left_lower
-    L0: 9.269 # m
-    EA: 5900  # kN/m
+    ap1: load.lp1
+    ap2: spreader.left_lower
+#    ap2: sh1.bow
+    Lultimate: 9.269 m
+    k: 5900 kN/m
+    diameter: 25 mm
 
   - id: SL2
-    from: load.lp2
-    to:   spreader.right_lower
-    L0: 9.269
-    EA: 5900
+    ap1: load.lp2
+    ap2: spreader.right_lower
+#    ap2: sh2.bow
+    Lultimate: 9.269 m
+    k: 5900 kN/m
+    diameter: 25 mm
 
   - id: SL3
-    from: load.lp3
-    to:   spreader.left_lower
-    L0: 8.669
-    EA: 6200
+    ap1: load.lp3
+    ap2: spreader.left_lower
+#    ap2: sh1.bow
+    Lultimate: 8.669 m
+    k: 6200 kN/m
+    diameter: 25 mm
 
   - id: SL4
-    from: load.lp4
-    to:   spreader.right_lower
-    L0: 8.669
-    EA: 6200
+    ap1: load.lp4
+    ap2: spreader.right_lower
+#    ap2: sh2.bow
+    Lultimate: 8.669 m
+    k: 6200 kN/m
+    diameter: 25 mm
 
   - id: sling_5
-    from: spreader.left_upper
-    to:   hook.hook
-    L0: 13.830
-    EA: 9400
+#    ap1: spreader.left_upper
+    ap1: sh1.bow
+#    ap1: sh1.pin
+    ap2: hook.hook
+    Lultimate: 13.830 m
+    k: 9400 kN/m
+    diameter: 25 mm
 
   - id: sling_6
-    from: spreader.right_upper
-    to:   hook.hook
-    L0: 13.830
-    EA: 9400
+#    ap1: spreader.right_upper
+    ap1: sh2.bow
+#    ap1: sh2.pin
+    ap2: sh3.pin
+    Lultimate: 6.5 m
+    k: 9400 kN/m
+    diameter: 25 mm
+
+  - id: sling_7
+    ap1: sh3.bow
+#    ap1: sh2.bow
+#    ap1: sh2.pin
+    ap2: hook.hook
+    Lultimate: 6.5 m
+    k: 9400 kN/m
+    diameter: 25 mm
 
 # ----------------------------------------------------------
 # Constraints
 # ----------------------------------------------------------
 constraints:
 
-  hook:
-    fix:
-      translation: [true, true, true]
-      rotation:    [true, true, true]
+  - ap1: hook.socket
+    ap2: world
+    constraints: [true, true, true, true, true, true]
+
+#  - body: hook
+#    point: socket
+#    constraints: [true, true, true, true, true, true]

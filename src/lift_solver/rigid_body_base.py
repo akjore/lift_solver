@@ -9,7 +9,7 @@ class RigidBodyBase:
 
         # Local transform relative to parent
         self.position = np.zeros(3) * ureg.meters
-        self.rotation = np.eye(3) * ureg.degrees
+        self.rotation = np.eye(3) #* ureg.radians
 
         # Hierarchy
         self.parent = None

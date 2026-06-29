@@ -91,10 +91,27 @@ class LiftProblem():
         """Add a shackle to the lift problem with the properties given by 'shackle'."""
         sh = Shackle().from_model(shackle["id"], shackle["model"])
 
-        pin_constraint = sh.connect_pin_to(self.attachment_points[shackle.get("pin_connection")])
-        self.connections[pin_constraint.id] = pin_constraint
+        # Add shackle's attachment points to registry
+        self.attachment_points[sh.pin.id] = sh.pin
+        self.attachment_points[sh.bow.id] = sh.bow
 
+        # Add shackle to registry
         self.objects[sh.id] = sh
+
+        # If pin_connection specified, move shackle and align pin with attachment point
+        pin_connection = shackle.get("pin_connection")
+        if pin_connection:
+            pin_constraint = sh.connect_pin_to(self.attachment_points[pin_connection])
+            self.connections[pin_constraint.id] = pin_constraint
+
+        rotation_about_pin = shackle.get("rotation_about_pin")
+        if rotation_about_pin:
+            sh.rotation_about_pin = rotation_about_pin
+
+        # If shackle pose was provided, use that - note either position is derived from pin_connnection and optional pin_rotation, or pose
+        pose = shackle.get("pose")
+        if pose:
+            sh.set_pose(pose.get("position"), pose.get("orientation"))
 
         return sh
 
