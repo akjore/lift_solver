@@ -81,7 +81,8 @@ The solver builds the system and runs a dynamic simulation to equilibrium using 
 
 ---
 
-🤝 Contributing
+## 🤝 Contributing
+
 This project is under active development. Contributions and feedback are welcome.
 
 ---
