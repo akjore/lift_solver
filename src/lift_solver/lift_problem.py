@@ -78,7 +78,8 @@ class LiftProblem:
         # Optionally update starting positions
         initial_state = problem.get("initial_state")
         if initial_state:
-            self.parse_initial_state(initial_state)
+#            self.parse_initial_state(initial_state)
+            self.apply_initial_state(initial_state)
 
 
     def add_body(self: Self, body: dict) -> None:
@@ -199,21 +200,114 @@ class LiftProblem:
         return isinstance(value, int | float | str)
 
 
-    def parse_initial_state(self: Self, initial_state_dict):
-        """Apply initial_state overrides to problem objects."""
+#    def parse_initial_state(self: Self, initial_state_dict):
+#        """Apply initial_state overrides to problem objects."""
 
-        for obj_id, values in initial_state_dict.items():
-            if len(values) != 6:
-                raise ValueError(f"{obj_id}: expected 6 values [x, y, z, rx, ry, rz]")
+#        for obj_id, values in initial_state_dict.items():
+#            if len(values) != 6:
+#                raise ValueError(f"{obj_id}: expected 6 values [x, y, z, rx, ry, rz]")
 
+#            x, y, z, rx, ry, rz = values
+#            position = Q_.from_list([x, y, z])
+#            orientation = Q_.from_list([rx, ry, rz])
+
+#            obj = self.objects[obj_id]
+
+#            if obj.parent is None:
+#                # absolute
+#                obj.set_pose(
+##                    position = position,
+#                    orientation = orientation,
+#                )
+#            else:
+#                # relative
+#                parent = obj.parent
+
+#                R_parent = parent.rotation
+#                p_parent = parent.position
+
+#                R_rel = parsed rotation
+#                p_rel = parsed position
+
+#                obj.rotation = R_parent @ R_rel
+#                obj.position = p_parent + R_parent @ p_rel
+
+    def apply_initial_state(self: Self, initial_state: dict):
+        """
+        Apply initial_state using RigidBodyBase methods.
+
+        Rules:
+        - parent=None  → absolute (global) pose
+        - parent!=None → local (relative) pose
+        """
+
+        resolved = set()
+
+#        def get_obj(obj_id):
+#            return problem.get_object(obj_id)
+
+        def parse_pose(values):
+            # [x, y, z, rx, ry, rz] with units
             x, y, z, rx, ry, rz = values
+
+#            position = np.array([
+#                x.to("m").magnitude,
+#                y.to("m").magnitude,
+#                z.to("m").magnitude
+#            ])
+
             position = Q_.from_list([x, y, z])
+
+            # pass raw quantity list to your existing method
+#            orientation = [rx, ry, rz]
             orientation = Q_.from_list([rx, ry, rz])
 
-            obj = self.objects[obj_id]
+            return position, orientation
 
-            if not obj.parent:
-                obj.set_pose(
-                    position = position,
-                    orientation = orientation,
+        # Resolve in dependency order
+        while len(resolved) < len(initial_state):
+
+            progress = False
+
+            for obj_id, values in initial_state.items():
+
+                if obj_id in resolved:
+                    continue
+
+#                obj = get_obj(obj_id)
+                obj = self.objects[obj_id]
+
+                # --- ROOT: absolute pose ---
+                if obj.parent is None:
+                    pos, ori = parse_pose(values)
+
+                    obj.set_global_pose(
+                        pos,
+                        obj._euler_to_matrix(ori)
+                    )
+
+                    resolved.add(obj_id)
+                    progress = True
+
+                # --- CHILD: relative pose ---
+                else:
+                    parent = obj.parent
+
+                    if parent.id not in resolved:
+                        continue  # wait for parent
+
+                    pos_rel, ori_rel = parse_pose(values)
+
+                    obj.set_local_pose(
+                        pos_rel,
+                        obj._euler_to_matrix(ori_rel)
+                    )
+
+                    resolved.add(obj_id)
+                    progress = True
+
+            if not progress:
+                unresolved = set(initial_state.keys()) - resolved
+                raise RuntimeError(
+                    f"Could not resolve initial_state; unresolved: {unresolved}"
                 )

@@ -65,6 +65,48 @@ class RigidBodyBase:
         self.rotation = R_new @ self.rotation
 
 
+
+    def set_global_pose(self, position, rotation):
+        """
+        Set pose in global coordinates.
+        """
+
+        if self.parent is None:
+            self.position = position
+            self.rotation = rotation
+        else:
+            R_parent = self.parent.global_rotation()
+            p_parent = self.parent.global_position()
+
+            self.position = R_parent.T @ (position - p_parent)
+            self.rotation = R_parent.T @ rotation
+
+
+    def set_local_pose(self, position, rotation):
+        """
+        Set pose relative to parent.
+        """
+        self.position = position
+        self.rotation = rotation
+
+
+    def relative_to(self, parent):
+        """
+        Return transform of self relative to given parent.
+        """
+
+        R_self = self.global_rotation()
+        p_self = self.global_position()
+
+        R_parent = parent.global_rotation()
+        p_parent = parent.global_position()
+
+        R_rel = R_parent.T @ R_self
+        p_rel = R_parent.T @ (p_self - p_parent)
+
+        return p_rel, R_rel
+
+
     def _euler_to_matrix(self: Self, euler: list) -> list:
         # Euler convention: ZYX (Rz @ Ry @ Rx)
         rx, ry, rz = euler.to("radians")

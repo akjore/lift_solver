@@ -673,36 +673,111 @@ def run_solver(mbs, simulation_duration, time_step):
     SC.renderer.Stop()
 
 
+#def export_initial_state(mbs, problem):
+#    """
+#    Export solved state from Exudyn, formatted as YAML initial_state block with units.
+#    """
+
+#    lines = []
+#    lines.append("initial_state:")
+#    lines.append("  # format: [x, y, z, roll, pitch, yaw]")
+
+#    def format_entry(obj):
+#        body_number = mbs.GetObjectNumber(obj.id)
+#        pos, R = get_body_state(mbs, body_number)
+
+#        if obj.parent:
+#            # Process a child - export relative to parent
+#            body_number_parent = mbs.GetObjectNumber(obj.parent.id)
+#            pos_parent, R_parent = get_body_state(mbs, body_number_parent)
+
+#            pos = R_parent.T @ (pos - pos_parent)
+#            R_rel = R_parent.T @ R
+#            euler = rotation_matrix_to_euler(R_rel)
+#        else:
+#            # Processing a root object
+#            euler = rotation_matrix_to_euler(R)
+
+#        values = [
+#            f"{pos[0]:.6g} m",
+#            f"{pos[1]:.6g} m",
+#            f"{pos[2]:.6g} m",
+#            f"{euler[0]:.6g} deg",
+#            f"{euler[1]:.6g} deg",
+#            f"{euler[2]:.6g} deg",
+#        ]
+
+#        return "[" + ", ".join(values) + "]"
+
+#    # bodies
+#    for body in problem.objects.values():
+#        lines.append(f"  {body.id}: {format_entry(body)}")
+
+#    return "\n".join(lines)
+
 def export_initial_state(mbs, problem):
     """
-    Export solved state from Exudyn, formatted as YAML initial_state block with units.
+    Export solver state into YAML-ready initial_state block.
+
+    Rules:
+    - parent=None  → export absolute pose
+    - parent!=None → export pose relative to parent
     """
 
     lines = []
     lines.append("initial_state:")
     lines.append("  # format: [x, y, z, roll, pitch, yaw]")
+    lines.append("  #")
+    lines.append("  # IMPORTANT:")
+    lines.append("  # - Bodies WITHOUT a parent are absolute (global)")
+    lines.append("  # - Bodies WITH a parent are relative to their parent")
+    lines.append("")
 
-    def format_entry(obj):
+#    for obj in problem.get_all_bodies():
+    for obj in problem.objects.values():
+
+        # --- get solver state ---
         body_number = mbs.GetObjectNumber(obj.id)
+        p_global, R_global = get_body_state(mbs, body_number)
 
-        pos, R = get_body_state(mbs, body_number)
+        # --- ROOT: export absolute ---
+        if obj.parent is None:
 
-        euler = rotation_matrix_to_euler(R)
+            euler = rotation_matrix_to_euler(R_global)
 
-        values = [
-            f"{pos[0]:.6g} m",
-            f"{pos[1]:.6g} m",
-            f"{pos[2]:.6g} m",
-            f"{euler[0]:.6g} deg",
-            f"{euler[1]:.6g} deg",
-            f"{euler[2]:.6g} deg",
-        ]
+            values = [
+                f"{p_global[0]:.6g} m",
+                f"{p_global[1]:.6g} m",
+                f"{p_global[2]:.6g} m",
+                f"{euler[0]:.6g} deg",
+                f"{euler[1]:.6g} deg",
+                f"{euler[2]:.6g} deg",
+            ]
 
-        return "[" + ", ".join(values) + "]"
+        # --- CHILD: export relative ---
+        else:
+            parent = obj.parent
 
-    # bodies
-    for body in problem.objects.values():
-        lines.append(f"  {body.id}: {format_entry(body)}")
+            parent_body_number = mbs.GetObjectNumber(parent.id)
+            p_parent, R_parent = get_body_state(mbs, parent_body_number)
+
+            # relative transform
+            p_rel = R_parent.T @ (p_global - p_parent)
+            R_rel = R_parent.T @ R_global
+
+            euler = rotation_matrix_to_euler(R_rel)
+
+            values = [
+                f"{p_rel[0]:.6g} m",
+                f"{p_rel[1]:.6g} m",
+                f"{p_rel[2]:.6g} m",
+                f"{euler[0]:.6g} deg",
+                f"{euler[1]:.6g} deg",
+                f"{euler[2]:.6g} deg",
+            ]
+
+        values_str = ", ".join(values)
+        lines.append(f"  {obj.id}: [{values_str}]")
 
     return "\n".join(lines)
 
