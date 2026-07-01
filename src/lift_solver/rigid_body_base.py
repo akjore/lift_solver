@@ -54,7 +54,7 @@ class RigidBodyBase:
     def set_pose(self: Self, position: np.array(3), orientation: np.array(3)) -> None:
         """Set body pose (position and orientation)."""
         self.position = position
-        self.rotation = self._euler_to_matrix(orientation.to("radians"))
+        self.rotation = self._euler_to_matrix(orientation)
 
     def translate(self: Self, vec: np.array(3)) -> None:
         """Set body position."""
@@ -67,24 +67,28 @@ class RigidBodyBase:
 
     def _euler_to_matrix(self: Self, euler: list) -> list:
         # Euler convention: ZYX (Rz @ Ry @ Rx)
-        rx, ry, rz = euler
+        rx, ry, rz = euler.to("radians")
+
+        cx, sx = np.cos(rx), np.sin(rx)
+        cy, sy = np.cos(ry), np.sin(ry)
+        cz, sz = np.cos(rz), np.sin(rz)
 
         Rx = np.array([
             [1, 0, 0],
-            [0, np.cos(rx), -np.sin(rx)],
-            [0, np.sin(rx),  np.cos(rx)],
+            [0, cx, -sx],
+            [0, sx, cx]
         ])
 
         Ry = np.array([
-            [ np.cos(ry), 0, np.sin(ry)],
+            [cy, 0, sy],
             [0, 1, 0],
-            [-np.sin(ry), 0, np.cos(ry)],
-        ])
+            [-sy, 0, cy]
+       ])
 
         Rz = np.array([
-            [np.cos(rz), -np.sin(rz), 0],
-            [np.sin(rz),  np.cos(rz), 0],
-            [0, 0, 1],
+            [cz, -sz, 0],
+            [sz, cz, 0],
+            [0, 0, 1]
         ])
 
         return Rz @ Ry @ Rx

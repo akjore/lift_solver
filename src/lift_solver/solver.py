@@ -20,6 +20,8 @@ from . import ureg, Q_
 
 prb = None
 logger = logging.getLogger(__name__)
+STEP_INTERVAL = 10
+LOG_INTERVAL = 50
 
 
 def solve(problem, simulation_duration, time_step):
@@ -49,6 +51,10 @@ def solve(problem, simulation_duration, time_step):
     # Return results
     get_sensor_results(mbs, problem)
 
+    # Export poses (position, orientation)
+    state = export_initial_state(mbs, problem)
+    print(state)
+
     max_force, max_moment, max_velocity = compute_residuals(mbs, problem.objects.values())
     print(f"Max residual force: {max_force}")
     print(f"Max residual moment: {max_moment}")
@@ -75,25 +81,7 @@ def setup_from_problem(ground, problem):
 
     # Create and place the objects
     for o in problem.objects.values():
-        if isinstance(o, RigidBody):
-            setup_body(mbs, g, o)
-        elif isinstance(o, Shackle):
-            setup_body(mbs, g, o)
-
-
-#            p_pin = o.pin.global_position()
-#            axis = o.pin.global_axis()
-
-#            p_bow = o.bow.global_position()
-
-#            # distance from axis:
-#            d = np.linalg.norm(np.cross(p_bow - p_pin, axis))
-
-#            print(o.id, d)
-
-
-        else:
-            print(f"Skipped {o}")
+        setup_body(mbs, g, o)
 
     for sl in problem.rigging.values():
         if isinstance(sl, Sling):
@@ -131,6 +119,7 @@ def setup_body(mbs, g: np.array, body: RigidBody):
     graphics_data_list.append(create_graphics(cog, body.visual))
     graphics_data_list.append(graphics.Basis(inertia.COM(), length=0.5))
 
+    # TODO: this should be more general - check if body.mesh exists; if so, use it.
     if isinstance(body, Shackle):
         graphics_data_list.append(
             graphics.FromSTLfile(
@@ -262,7 +251,6 @@ def compute_rope_damping(EA, L0, mass, safety_factor=0.8):
     c_crit = 2 * np.sqrt(EA/L0 * mass)   # Ns/m
 
     # derive factor relative to EA:
-    # c = (fac * EA) / L0 = fac * k
     damping_rope_fac = safety_factor * (c_crit / (EA/L0))
 
     return damping_rope_fac
@@ -280,33 +268,6 @@ def setup_ground(mbs):
     return ground
 
 
-#def get_global_marker_position(mbs, marker_num):
-#    # Get the marker properties; body and local position on body
-#    m = mbs.GetMarker(marker_num)
-
-#    # Return the global position of that local position
-#    return mbs.GetObjectOutputBody(
-#        m["bodyNumber"],
-#        exu.OutputVariableType.Position,
-#        localPosition = m["localPosition"],
-#        configuration = exu.ConfigurationType.Reference,
-#    )
-
-#def get_marker(mbs, ground, ap):
-#
-#    if isinstance(ap, World):
-#        return mbs.AddMarker(
-#            exu.MarkerBodyRigid(
-#                name = parent + "." + ap.id,
-#                bodyNumber = ground,
-#                localPosition = ap.global_position().to("m").magnitude
-#                visualization = exu.utilities.VMarkerBodyRigid(),
-#            )
-#        )
-#    else:
-#        return mbs.GetMarkerNumber(ap.id)
-
-
 def setup_constraint(mbs, ground, constraint):
     def create_marker(ground: int, parent: str, ap: AttachmentPoint):
         m = mbs.AddMarker(
@@ -322,66 +283,10 @@ def setup_constraint(mbs, ground, constraint):
 
     if isinstance(constraint, PinConstraint):
         return create_pin_constraint(mbs, ground, constraint)
-
     else:
         return setup_generic_constraint(mbs, ground, constraint)
 
-    ap1 = constraint.ap1
-    ap2 = constraint.ap2
 
-    # temp only
-    print()
-    print(f"constraint: {constraint}")
-    print(f"aps: {ap1.id}, {ap2.id}")
-    print(f"axis_local: {ap1.axis_local}, {ap2.axis_local}")
-    # end temp only
-
-
-
-    marker_numbers = []
-    this_marker = [ap1, ap2]
-    other_marker = [ap2, ap1]
-    for this_ap, other_ap in zip(this_marker, other_marker):
-        if isinstance(this_ap, World):
-            m = create_marker(ground, ap1.id, other_ap)
-        else:
-            m = mbs.GetMarkerNumber(this_ap.id)
-
-        marker_numbers.append(m)
-
-    # testing
-    if (not isinstance(ap1, World)) and (not isinstance(ap2, World)) and (isinstance(ap1.parent, Shackle) or isinstance(ap2.parent, Shackle)):
-       m1 = mbs.GetMarker(marker_numbers[0])
-       m2 = mbs.GetMarker(marker_numbers[1])
-       mbs.CreateRevoluteJoint(
-            bodyNumbers = [m1["bodyNumber"], m2["bodyNumber"]],
-            position = [0, 0, 0],
-            axis = [1, 0, 0],
-            useGlobalFrame = False,
-            axisRadius = 0.35/2,
-            axisLength = 1,
-        )
-    else:
-        joint = mbs.AddObject(
-            exu.utilities.GenericJoint(
-                markerNumbers = marker_numbers,
-                constrainedAxes = constraint.constraints,
-                visualization = exu.utilities.VGenericJoint(
-                    show = True,
-                    axesRadius = 0.2,
-                    axesLength = 0.2,
-                )
-            )
-        )
-
-
-
-#    if isinstance(ap1.parent, Shackle):
-#        mbs.AddObject(exu.utilities.TorsionalSpringDamper(
-#            markerNumbers = marker_numbers,
-#            stiffness = 1.0,
-#            damping = 0.0
-#        ))
 
 def create_pin_constraint(mbs, ground, constraint):
 
@@ -463,7 +368,6 @@ def setup_generic_constraint(mbs, ground, constraint):
             m = mbs.GetMarkerNumber(this_ap.id)
 
         marker_numbers.append(m)
-#        marker_numbers.append(get_marker(mbs, ground, this_ap))
 
     joint = mbs.AddObject(
         exu.utilities.GenericJoint(
@@ -476,20 +380,6 @@ def setup_generic_constraint(mbs, ground, constraint):
             )
         )
     )
-
-
-#def get_marker(mbs, ground, ap):
-#    if isinstance(ap, World):
-#        return mbs.AddMarker(
-#            exu.MarkerBodyRigid(
-#                name = ap.parent + "." + ap.id,
-#                bodyNumber = ground,
-#                localPosition = ap.global_position().to("m").magnitude,
-#                visualization = exu.utilities.VMarkerBodyRigid(),
-#            )
-#        )
-#    else:
-#        return mbs.GetMarkerNumber(ap.id)
 
 
 def setup_damping(mbs, ground, problem):
@@ -516,28 +406,6 @@ def setup_damping(mbs, ground, problem):
             drawSize = 0.5,
         )
 
-#        # Create a damper
-#        oSD = mbs.CreateSpringDamper(
-#            bodyNumbers = [ground, b],
-#            localPosition0 = cog_global + np.array([10, 0, 0]),
-#            localPosition1 = cog_local,
-#            stiffness = 0.,
-#            damping = 5e4,
-#            show = True,
-#            drawSize = 0.5,
-#        )
-
-#        # Create a damper
-#        oSD = mbs.CreateSpringDamper(
-#            bodyNumbers = [ground, b],
-#            localPosition0 = cog_global + np.array([0, 10, 0]),
-#            localPosition1 = cog_local,
-#            stiffness = 0.,
-#            damping = 5e4,
-#            show = True,
-#            drawSize = 0.5,
-#        )
-
 
 def get_global_position(mbs, body, local_position):
     """Return the global position of local_position on body 'body'."""
@@ -553,7 +421,6 @@ def get_global_position(mbs, body, local_position):
 def setup_sensors(mbs, problem):
     """Specify sensors."""
 
-#    for body in problem["bodies"]:
     for body in problem.objects.values():
         b = mbs.GetObjectNumber(body.id)
         o = mbs.GetObject(b)
@@ -729,9 +596,6 @@ def get_sensor_results(mbs, problem):
             print(f"Sensor: {sensor["name"]}, converted to t and including DAF=1.2 and k_skl=1.1: {mbs.GetSensorValues(sensor_number)/9.81/1000*1.2*1.1}")
 
 
-STEP_INTERVAL = 10
-LOG_INTERVAL = 50
-
 def post_step_user_function(mbs, t):
 
     step = mbs.sys.get("step", 0) + 1
@@ -743,10 +607,6 @@ def post_step_user_function(mbs, t):
         mbs.sys["v_res"] = v_res
     else:
         v_res = mbs.sys.get("v_res", 0.0)
-
-    # logging
-#    if step % LOG_INTERVAL == 0:
-#        print(f"t={t:.2f}, v={v_res:.3e}")
 
     # adaptive damping
     if v_res > 0.5:
@@ -764,46 +624,6 @@ def post_step_user_function(mbs, t):
         mbs.systemData.SetODE2Coordinates_t(coords_t)
 
     return True
-
-
-
-#def post_step_user_function(mbs, t):
-#
-#    f_res, m_res, v_res = compute_residuals(mbs, prb.objects.values())
-
-    # reduce logging frequency
-#    if int(t*50) % 50 == 0:
-#        print(f"t={t:.2f}, v={v_res:.3e}")
-
-    # adaptive damping
-#    if v_res > 0.5:
-#        factor = 0.5
-#    elif v_res > 0.05:
-#        factor = 0.2
-#    elif v_res > 0.005:
-#        factor = 0.1
-#    else:
-#        factor = 0.0   # don't interfere near convergence
-
-#    if factor > 0:
-#        coords_t = mbs.systemData.GetODE2Coordinates_t()
-#        coords_t *= (1 - factor)
-#        mbs.systemData.SetODE2Coordinates_t(coords_t)
-
-#    return True
-
-
-
-#def terminate_user_function(mbs, t):
-#
-#    f_res, m_res, v_res = compute_residuals(mbs, problem["bodies"])
-
-#    if v_res < 1e-3 and f_res < 1e3 and m_res < 1e5:
-#        print(f"✅ Converged at t={t:.2f}")
-#        return True
-
-#    return False
-
 
 
 def run_solver(mbs, simulation_duration, time_step):
@@ -841,17 +661,7 @@ def run_solver(mbs, simulation_duration, time_step):
     SC.renderer.Start()
     SC.renderer.DoIdleTasks()
 
-
-
     mbs.SetPostStepUserFunction(post_step_user_function)
-#    ss.timeIntegration.userDefinedTerminate = terminate_user_function
-
-
-    # attach user function
-#    mbs.SetPostStepUserFunction = userFunction
-
-    # attach stop condition
-#    ss.timeIntegration.userDefinedTerminate = stopFunction
 
     mbs.SolveDynamic(
         simulationSettings = ss,
@@ -859,25 +669,86 @@ def run_solver(mbs, simulation_duration, time_step):
         showHints = False,
     )
 
-#    coords = mbs.systemData.GetODE2Coordinates()
-#    coords_t = mbs.systemData.GetODE2Coordinates_t()
-
-#    coords_t[:] = 0
-
-#    mbs.systemData.SetODE2Coordinates(coords)
-#    mbs.systemData.SetODE2Coordinates_t(coords_t)
-
-#    mbs.SolveDynamic(
-#        simulationSettings = ss,
-#        updateInitialValues = True,
-#    )
-
     mbs.SolutionViewer()
     SC.renderer.Stop()
 
 
+def export_initial_state(mbs, problem):
+    """
+    Export solved state from Exudyn, formatted as YAML initial_state block with units.
+    """
+
+    lines = []
+    lines.append("initial_state:")
+    lines.append("  # format: [x, y, z, roll, pitch, yaw]")
+
+    def format_entry(obj):
+        body_number = mbs.GetObjectNumber(obj.id)
+
+        pos, R = get_body_state(mbs, body_number)
+
+        euler = rotation_matrix_to_euler(R)
+
+        values = [
+            f"{pos[0]:.6g} m",
+            f"{pos[1]:.6g} m",
+            f"{pos[2]:.6g} m",
+            f"{euler[0]:.6g} deg",
+            f"{euler[1]:.6g} deg",
+            f"{euler[2]:.6g} deg",
+        ]
+
+        return "[" + ", ".join(values) + "]"
+
+    # bodies
+    for body in problem.objects.values():
+        lines.append(f"  {body.id}: {format_entry(body)}")
+
+    return "\n".join(lines)
 
 
+def get_body_state(mbs, body_number):
+    """
+    Extract global position and rotation matrix from Exudyn.
+    """
+
+    obj = mbs.GetObject(body_number)
+    node_number = obj["nodeNumber"]
+
+    # position
+    p = mbs.GetNodeOutput(
+        node_number,
+        exu.OutputVariableType.Position
+    )
+
+    # rotation matrix (flattened → reshape)
+    R = np.array(
+        mbs.GetNodeOutput(
+            node_number,
+            exu.OutputVariableType.RotationMatrix
+        )
+    ).reshape((3, 3))
+
+    return p, R
+
+
+def rotation_matrix_to_euler(R):
+    """
+    Convert rotation matrix to XYZ Euler angles (degrees).
+    """
+    sy = np.sqrt(R[0,0]**2 + R[1,0]**2)
+    singular = sy < 1e-8
+
+    if not singular:
+        x = np.arctan2(R[2,1], R[2,2])
+        y = np.arctan2(-R[2,0], sy)
+        z = np.arctan2(R[1,0], R[0,0])
+    else:
+        x = np.arctan2(-R[1,2], R[1,1])
+        y = np.arctan2(-R[2,0], sy)
+        z = 0
+
+    return np.degrees([x, y, z])
 
 
 def solve_with_auto_stop(mbs, SC, problem):
@@ -927,6 +798,7 @@ def solve_with_auto_stop(mbs, SC, problem):
         if v_res < v_tol and f_res < f_tol and m_res < m_tol:
             print("Converged — stopping")
             break
+
 
 def plot_convergence(mbs, problem):
     import matplotlib.pyplot as plt
@@ -1008,5 +880,3 @@ def plot_residuals(times, res_f, res_m):
     plt.grid()
 
     plt.show()
-
-

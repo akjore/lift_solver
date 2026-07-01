@@ -3,6 +3,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Self
 
+import numpy as np
 import pint
 import yaml
 
@@ -73,6 +74,11 @@ class LiftProblem:
         if constraints:
             for constraint in constraints:
                 self.add_constraint(constraint)
+
+        # Optionally update starting positions
+        initial_state = problem.get("initial_state")
+        if initial_state:
+            self.parse_initial_state(initial_state)
 
 
     def add_body(self: Self, body: dict) -> None:
@@ -181,6 +187,9 @@ class LiftProblem:
         lst = [self.parse_quantity(v) for v in vec]
         try:
             return Q_.from_list(lst)
+        except pint.DimensionalityError:
+            # list contains mix of e.g. meters and deg
+            return lst
         except AttributeError:
             return lst
 
@@ -189,3 +198,22 @@ class LiftProblem:
         """Check of 'value' is an int | float | str."""
         return isinstance(value, int | float | str)
 
+
+    def parse_initial_state(self: Self, initial_state_dict):
+        """Apply initial_state overrides to problem objects."""
+
+        for obj_id, values in initial_state_dict.items():
+            if len(values) != 6:
+                raise ValueError(f"{obj_id}: expected 6 values [x, y, z, rx, ry, rz]")
+
+            x, y, z, rx, ry, rz = values
+            position = Q_.from_list([x, y, z])
+            orientation = Q_.from_list([rx, ry, rz])
+
+            obj = self.objects[obj_id]
+
+            if not obj.parent:
+                obj.set_pose(
+                    position = position,
+                    orientation = orientation,
+                )
