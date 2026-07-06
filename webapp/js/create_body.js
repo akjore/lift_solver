@@ -30,11 +30,11 @@ export async function createGenericBody(obj, group) {
     // set transformation of body and children
     const m = matrix4From3x3(obj.rotation);
 
-    group.position.set(...obj.position);
+    group.position.set(...obj.position.magnitude);
     group.setRotationFromMatrix(m);
 
     // draw coordinate system marker at CoG
-    group.add(drawCoG(obj.cog));
+    group.add(drawCoG(obj.cog.magnitude));
 
     // draw attachment points
     for (const point of obj.attachment_points) {
@@ -43,7 +43,7 @@ export async function createGenericBody(obj, group) {
     }
 
     const visualGroup = new THREE.Group();
-    visualGroup.position.set(...obj.cog);
+    visualGroup.position.set(...obj.cog.magnitude);
     group.add(visualGroup);
 
     if (obj.visual) {
@@ -86,17 +86,20 @@ async function drawBodyVisual(bodyGroup, visual) {
 
   // offset inside body
   if (visual.offset) {
-    mesh.position.set(...visual.offset);
+    mesh.position.set(...visual.offset.magnitude);
   }
 
   return mesh;
 }
 
 function createBoxVisual(visual) {
+//    const geom = new THREE.BoxGeometry(
+//      visual.size[0],
+//      visual.size[1],
+//      visual.size[2]
+//    );
     const geom = new THREE.BoxGeometry(
-      visual.size[0],
-      visual.size[1],
-      visual.size[2]
+      ...visual.size.magnitude
     );
 
     const mat = new THREE.MeshStandardMaterial({
@@ -110,9 +113,9 @@ function createBoxVisual(visual) {
 
 function createCylinderVisual(visual) {
     const geom = new THREE.CylinderGeometry(
-      visual.diameter/2,
-      visual.diameter/2,
-      visual.length,
+      visual.diameter.magnitude/2,
+      visual.diameter.magnitude/2,
+      visual.length.magnitude,
       16
     );
 
@@ -158,7 +161,7 @@ async function createSTLVisual(visual) {
 
     // transform
     mesh.position.set(
-        ...visual.translation
+        ...visual.translation.magnitude
     );
 
     const m =

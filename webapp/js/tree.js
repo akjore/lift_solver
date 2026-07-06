@@ -1,80 +1,174 @@
 import { selectObject, requestZoom } from "./selection.js";
 
-
 export function buildTree(world) {
+    const container = document.getElementById("tree-content");
+    container.innerHTML = "";
 
-    const bodies = document.getElementById("tree-bodies");
+    const treeModel = buildTreeModel(world);
+    container.appendChild(createTreeNode(treeModel, 0));
+}
 
-    const shackles = document.getElementById("tree-shackles");
+function buildTreeModel(world) {
+    return {
+        id: "model",
+        label: "Model",
 
-    const slings = document.getElementById("tree-slings");
+        children: [
+            {
+                id: "bodies",
+                label: "Bodies",
+                children: [...world.bodies.children.map(buildObjectNode)]
+            },
+            {
+                id: "shackles",
+                label: "Shackles",
+                children: [...world.shackles.children.map(buildObjectNode)
+                ]
+            },
+            {
+                id: "slings",
+                label: "Slings",
+                children: [...world.slings.children.map(buildObjectNode)]
+            }
 
-    bodies.innerHTML = "";
-    shackles.innerHTML = "";
-    slings.innerHTML = "";
+        ]
+    };
+}
 
-    for (const object of world.pickables) {
-        let container = null;
-        switch (object.userData.type) {
-            case "body":
-                container = bodies;
-                break;
+function buildObjectNode(object) {
+    const node = {
+        id:
+            object.userData?.id ??
+            object.name,
+        label:
+            object.userData?.id ??
+            object.name,
+        object,
 
-            case "shackle":
-                container = shackles;
-                break;
+        children: []
 
-            case "sling":
-                container = slings;
-                break;
+    };
 
-            default:
-                continue;
-        }
+    collectChildren(object, node);
 
-        addTreeItem(container, object, 2);
-    }
+    return node;
 }
 
 
-// function createTreeNode(object, level = 0) {
-//    const item = document.createElement("div");
+function createTreeNode(node, level = 0) {
 
-//    item.className = `tree-item indent-${level}`;
+    const container = document.createElement("div");
+    const header = document.createElement("div");
+    header.className = "tree-item";
+    header.style.paddingLeft = `${level * 16}px`;
 
-//    item.textContent = object.userData.id;
+    // -----------------
+    // Arrow
+    // -----------------
+    const hasChildren = node.children && node.children.length > 0;
 
-//    for (const child of object.children) {
-//        if (child.userData?.id) {
-//            createTreeNode(child, level + 1);
-//        }
-//    }
-//}
+    const arrow = document.createElement("span");
+    arrow.className = "tree-arrow";
+    arrow.textContent = hasChildren ? "▶" : "";
 
-//function addTreeGroups() {
-//    for (const obj of world.pickables) {
-//
-//        if (obj.userData.type === "body") {
-//            addTreeItem(bodiesContainer, obj);
-//        }
-//
-//        if (obj.userData.type === "shackle") {
-//            addTreeItem(shacklesContainer, obj);
-//        }
+    header.appendChild(arrow);
 
-//        if (obj.userData.type === "sling") {
-//            addTreeItem(slingsContainer, obj);
-//        }
-//    }
-//}
+    // -----------------
+    // Label
+    // -----------------
+    const label = document.createElement("span");
+    label.textContent = node.label;
+
+    header.appendChild(label);
+
+    // -----------------
+    // Selection
+    // -----------------
+    if (node.object) {
+        header.dataset.objectId = node.object.userData.id;
+
+        header.addEventListener(
+            "click",
+            event => {
+
+                event.stopPropagation();
+
+                selectObject(
+                    node.object
+                );
+
+            }
+        );
+
+        header.addEventListener(
+            "dblclick",
+            event => {
+
+                event.stopPropagation();
+
+                document.dispatchEvent(
+                    new CustomEvent(
+                        "zoomToObject",
+                        {
+                            detail:
+                                node.object
+                        }
+                    )
+                );
+
+            }
+        );
+    }
+
+    container.appendChild(header);
+
+    // -----------------
+    // Children
+    // -----------------
+    if (hasChildren) {
+        const childContainer = document.createElement("div");
+        childContainer.className = "tree-section";
+        childContainer.hidden = true;
+
+        arrow.addEventListener(
+            "click",
+            event => {
+
+                event.stopPropagation();
+
+                childContainer.hidden =
+                    !childContainer.hidden;
+
+                arrow.textContent =
+                    childContainer.hidden
+                        ? "▶"
+                        : "▼";
+
+            }
+        );
+
+        node.children.forEach(child => {
+            childContainer.appendChild(
+                createTreeNode(
+                    child,
+                    level + 1
+                )
+            );
+
+        });
+
+        container.appendChild(
+            childContainer
+        );
+    }
+
+    return container;
+}
 
 function addTreeItem(container, object) {
     const item = document.createElement("div");
-
     item.className = "tree-item indent-2";
-
     item.textContent = object.userData.id;
-
     item.dataset.objectId = object.userData.id;
 
     item.addEventListener(
@@ -101,6 +195,7 @@ function addTreeItem(container, object) {
 }
 
 export function highlightTreeItem(id) {
+    revealTreeItem(id);
 
     document
         .querySelectorAll(".tree-item")
@@ -110,8 +205,7 @@ export function highlightTreeItem(id) {
             )
         );
 
-    const item =
-        document.querySelector(
+    const item = document.querySelector(
             `[data-object-id="${id}"]`
         );
 
@@ -120,4 +214,142 @@ export function highlightTreeItem(id) {
             "selected"
         );
     }
+}
+
+function initializeTree() {
+    document
+        .querySelectorAll(".tree-section-header")
+        .forEach(header => {
+
+            header.addEventListener(
+                "click",
+                () => toggleSection(header)
+            );
+
+        });
+}
+
+function toggleSection(header) {
+
+    const targetId = header.dataset.target;
+
+    const section = document.getElementById(targetId);
+
+    if (!section) {
+        console.warn(`Tree section '${targetId}' not found`);
+        return;
+    }
+
+    const expanded = !section.hidden;
+
+    section.hidden = expanded;
+
+
+    const arrow = header.querySelector(".tree-arrow");
+    arrow.textContent = expanded ? "▶" : "▼";
+}
+
+export function revealTreeItem(id) {
+
+    const item = document.querySelector(
+        `[data-object-id="${id}"]`
+    );
+
+    if (!item) {
+        return;
+    }
+
+    let current = item.parentElement;
+
+    while (current) {
+
+        if (current.hidden) {
+            current.hidden = false;
+        }
+
+        current = current.parentElement;
+    }
+}
+
+function collectChildren(object, node) {
+
+    for (const child of object.children) {
+
+        if (child.userData?.id) {
+
+            node.children.push(
+                buildObjectNode(child)
+            );
+
+        } else {
+
+            collectChildren(
+                child,
+                node
+            );
+
+        }
+
+    }
+}
+
+export function initializeVisibility(world) {
+    document
+        .getElementById("show-bodies")
+        .addEventListener("change", e => {
+
+            world.bodies.visible =
+                e.target.checked;
+
+        });
+
+    document
+        .getElementById("show-shackles")
+        .addEventListener("change", e => {
+
+            world.shackles.visible =
+                e.target.checked;
+
+        });
+
+    document
+        .getElementById("show-slings")
+        .addEventListener("change", e => {
+
+            world.slings.visible =
+                e.target.checked;
+
+        });
+
+    const header = document.getElementById("display-header");
+    const section = document.getElementById("display-section");
+    const arrow = document.getElementById("display-arrow");
+
+//    header.addEventListener(
+//        "click",
+//        () => {
+//            section.hidden = !section.hidden;
+//            arrow.textContent =
+//                section.hidden
+//                    ? "▶"
+//                    : "▼";
+//        }
+//    );
+    arrow.addEventListener(
+        "click",
+        event => {
+
+            event.stopPropagation();
+
+            toggleDisplay(section, arrow);
+
+        }
+    );
+}
+
+function toggleDisplay(section, arrow) {
+
+    section.hidden = !section.hidden;
+
+    arrow.textContent = section.hidden ? "▶" : "▼";
 }

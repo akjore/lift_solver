@@ -291,8 +291,6 @@ class LiftProblem:
                 )
 
     def to_render_model(self):
-#        target_unit_length = "m"
-#        target_unit_mass = "kg"
         return {
             "bodies": [self._render_dict(obj) for obj in self.bodies.values()],
             "shackles": [self._render_dict(obj) for obj in self.shackles.values()],
@@ -301,10 +299,11 @@ class LiftProblem:
 
     def _render_dict(self, obj):
         d = obj.to_dict()
+
         return cnv_quantity(d)
 
 
-def cnv_quantity(value):
+def cnv_quantity(value) -> dict:
     if isinstance(value, dict):
         return {
             k: cnv_quantity(v)
@@ -318,32 +317,52 @@ def cnv_quantity(value):
         ]
 
     if isinstance(value, np.ndarray):
-        return cnv_quantity(value.tolist())
+#        return cnv_quantity(value.tolist())
+#        return {
+#            "magnitude": value.tolist(),
+#            "units": "",
+#        }
+        return value.tolist()
 
-    if isinstance(value, pint.Quantity) and isinstance(value.magnitude, np.ndarray):
-        return cnv_quantity(value.tolist())
+#    if isinstance(value, pint.Quantity) and isinstance(value.magnitude, np.ndarray):
+#        return cnv_quantity(value.tolist())
 
     if isinstance(value, pint.Quantity):
+        val = value
+        if val.check("[length]"):
+            val.ito("m")
+        elif value.check("[mass]"):
+            val.ito("kg")
+        elif value.check("[]"):
+            val.ito("rad")
 
+        mag = val.magnitude
+        unit = val.units
+        if isinstance(mag, np.ndarray):
+            mag = mag.tolist()
         # Lengths → m
-        if value.check("[length]"):
-            return float(
-                value.to("m").magnitude
-            )
+#        if value.check("[length]"):
+#            return float(
+#                value.to("m").magnitude
+#            )
 
         # Masses → kg
-        if value.check("[mass]"):
-            return float(
-                value.to("kg").magnitude
-            )
+#        if value.check("[mass]"):
+#            return float(
+#                value.to("kg").magnitude
+#            )
 
         # Angles → rad
-        if value.check("[]"):
-            return float(
-                value.to("rad").magnitude
-            )
+#        if value.check("[]"):
+#            return float(
+#                value.to("rad").magnitude
+#            )
+        return {
+            "magnitude": mag,
+            "units": f"{unit:~P}",
+        }
 
-        # Everything else
-        return float(value.magnitude)
+#        # Everything else
+#        return float(value.magnitude)
 
     return value

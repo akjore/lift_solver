@@ -370,7 +370,8 @@ class Shackle(RigidBodyBase):
             ref_shackle = Shackle().from_model("", "GP800")
             ref_length = ref_shackle.inside_length
 
-        return self.inside_length / ref_length
+        # Return a non-pint item, this to distinguish it from e.g. angles
+        return (self.inside_length / ref_length).magnitude
 
 
     def rotation_matrix_from_vectors(self: Self, vec1: np.array, vec2: np.array) -> np.array:

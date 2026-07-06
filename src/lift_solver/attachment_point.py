@@ -90,7 +90,7 @@ class AttachmentPoint:
         data = {
             "id": self.id,
             "parent": self.parent.id,
-            "position_local": self.position_local.tolist(),
+            "position_local": self.position_local,
             "axis_local": self.axis_local,
         }
 

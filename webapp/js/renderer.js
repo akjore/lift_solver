@@ -7,7 +7,7 @@ import { createBody } from "./create_body.js";
 import { createShackle } from "./create_shackle.js";
 import { createSling } from "./create_sling.js";
 import { findSelectable, requestZoom, selectObject } from "./selection.js";
-import { buildTree } from "./tree.js";
+import { buildTree, initializeVisibility } from "./tree.js";
 
 let scene, camera, renderer, controls;
 
@@ -103,6 +103,34 @@ export function initRenderer(containerId = "canvas") {
 
       }
     );
+
+    document.getElementById("fit-button").addEventListener(
+        "click",
+        () => fitCameraToScene(world.root)
+    );
+
+    document.getElementById("iso-button").addEventListener(
+        "click",
+        viewIso
+    );
+
+    document.getElementById("top-button").addEventListener(
+        "click",
+        viewTop
+    );
+
+    document.getElementById("front-button").addEventListener(
+        "click",
+        viewFront
+    );
+
+    document.getElementById("side-button").addEventListener(
+        "click",
+        viewSide
+    );
+
+    initializeVisibility(world);
+
     animate();
 }
 
@@ -372,3 +400,39 @@ function zoomToObject(object) {
     controls.update();
 }
 
+function setView(direction) {
+
+    const distance =
+        camera.position.distanceTo(
+            controls.target
+        );
+
+    camera.position.copy(
+        controls.target.clone().add(
+            direction
+                .clone()
+                .normalize()
+                .multiplyScalar(distance)
+        )
+    );
+
+    camera.up.set(0, 0, 1);
+
+    controls.update();
+}
+
+function viewIso() {
+    setView(new THREE.Vector3(1, 1, 1));
+}
+
+function viewTop() {
+    setView(new THREE.Vector3(0, 0, 1));
+}
+
+function viewFront() {
+    setView(new THREE.Vector3(0, -1, 0));
+}
+
+function viewSide() {
+    setView(new THREE.Vector3(1, 0, 0));
+}

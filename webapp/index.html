@@ -124,10 +124,6 @@
             padding: 10px;
         }
 
-        .tree-item {
-            padding: 4px 8px;
-            cursor: pointer;
-        }
 
         .tree-item:hover {
             background: rgba(255,255,255,0.05);
@@ -222,7 +218,50 @@
         }
 
         .tree-item.selected {
-            background: #3f5e8c;
+            border-left: 3px solid #4d9fff;
+            padding-left: 13px; /* offset border width */
+        }
+
+        .display-option {
+            display: block;
+            padding-left: 16px;
+            white-space: nowrap;
+            padding-left: 24px;
+           user-select: none;
+        }
+
+        .tree-section-header:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .tree-item,
+        .tree-section-header {
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        .tree-section-header {
+            padding-left: 0px;
+        }
+
+        .tree-arrow {
+            display: inline-block;
+            width: 12px;
+            flex: 0 0 12px;
+        }
+
+
+        .tree {
+            user-select: none;
+        }
+
+
+        input[type="checkbox"] {
+            accent-color: #4d9fff;
+            transform: scale(0.9);
         }
     </style>
 </head>
@@ -242,7 +281,7 @@
 
         <div class="toolbar-spacer"></div>
 
-        <button>Fit</button>
+        <button id="fit-button">Fit</button>
 
     </div>
 
@@ -255,35 +294,50 @@
             <div class="panel-title">Model</div>
 
             <div class="tree">
-
-                <div class="tree-item">▼ Model</div>
-
-                <div class="tree-item indent-1">▼ Bodies</div>
-                <div id="tree-bodies"></div>
-
-                <div class="tree-item indent-1">▼ Shackles</div>
-                <div id="tree-shackles"></div>
-
-                <div class="tree-item indent-1">▼ Slings</div>
-                <div id="tree-slings"></div>
+                <div id="tree-content"></div>
 
                 <br>
 
-                <div class="tree-item">▶ Results</div>
-                <div class="tree-item">▶ Code Check</div>
+                <div id="results-header" class="tree-section-header">
+                    <span class="tree-arrow">▶</span>
+                    <span>Results</span>
+                </div>
+
+                <div id="codecheck-header" class="tree-section-header">
+                    <span class="tree-arrow">▶</span>
+                    <span>Code Check</span>
+                </div>
 
                 <br>
 
-                <div class="tree-item">▼ Display</div>
+                <div id="display-header" class="tree-section-header" data-target="tree-display">
+                    <span id="display-arrow" class="tree-arrow">▼</span>
+                    <span>Display</span>
+                </div>
 
-                <div class="tree-item indent-1">☑ Bodies</div>
-                <div class="tree-item indent-1">☑ CoGs</div>
-                <div class="tree-item indent-1">☑ Attachment Points</div>
-                <div class="tree-item indent-1">☑ Slings</div>
-                <div class="tree-item indent-1">☑ Shackles</div>
-                <div class="tree-item indent-1">☐ Local Axes</div>
+                <div id="display-section" class="tree-section">
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-bodies" checked>Bodies
+                    </label>
 
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-shackles" checked>Shackles
+                    </label>
+
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-slings" checked>Slings
+                    </label>
+
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-attachment-points" checked>Attachment Points
+                    </label>
+
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-cogs" checked>CoGs
+                    </label>
+                </div>
             </div>
+
 
         </div>
 
@@ -298,10 +352,10 @@
                 </div>
 
                 <div class="view-controls">
-                    <button>ISO</button>
-                    <button>TOP</button>
-                    <button>FRONT</button>
-                    <button>SIDE</button>
+                    <button id="iso-button">ISO</button>
+                    <button id="top-button">TOP</button>
+                    <button id="front-button">FRONT</button>
+                    <button id="side-button">SIDE</button>
                 </div>
 
                 <div class="orientation-cube">

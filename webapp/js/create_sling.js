@@ -46,7 +46,7 @@ export function createSling(sling, world) {
     // Future sheaves
     for (const sheave of sling.sheaves ?? []) {
         points.push(
-            new THREE.Vector3(...sheave.position)
+            new THREE.Vector3(...sheave.position.magnitude)
         );
     }
 
@@ -63,7 +63,7 @@ export function createSling(sling, world) {
     const geometry = new THREE.TubeGeometry(
         curve,
         50,                         // segments
-        sling.diameter / 2,
+        sling.diameter.magnitude / 2,
         16,                         // radial segments
         false                       // closed
     );

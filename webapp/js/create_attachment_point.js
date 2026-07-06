@@ -10,7 +10,8 @@ export function createAttachmentPoint(ap) {
     group.userData = {
         id: ap.id,
         type: "attachmentPoint",
-        fit: true
+        data: ap,
+        fit: true,
     };
 
     switch (ap.type ?? "unknown") {
@@ -27,15 +28,15 @@ export function createAttachmentPoint(ap) {
             break;
     }
 
-    group.position.set(...ap.position_local);
+    group.position.set(...ap.position_local.magnitude);
 
     return group;
 }
 
 function createPadeye(ap) {
 
-    const rOuter = ap.outer_diameter * 0.5;
-    const rInner = ap.hole_diameter * 0.5;
+    const rOuter = ap.outer_diameter.magnitude * 0.5;
+    const rInner = ap.hole_diameter.magnitude * 0.5;
 
     const shape = new THREE.Shape();
     shape.absarc(0, 0, rOuter, 0, Math.PI * 2);
@@ -46,7 +47,7 @@ function createPadeye(ap) {
     shape.holes.push(hole);
 
     const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth: ap.thickness,
+        depth: ap.thickness.magnitude,
         bevelEnabled: false
     });
 
@@ -54,7 +55,7 @@ function createPadeye(ap) {
     geometry.translate(
         0,
         0,
-        -ap.thickness / 2
+        -ap.thickness.magnitude / 2
     );
 
     const material = new THREE.MeshStandardMaterial({
@@ -77,9 +78,9 @@ function createPadeye(ap) {
 function createPin(ap) {
 
     const geometry = new THREE.CylinderGeometry(
-        ap.diameter * 0.5,
-        ap.diameter * 0.5,
-        ap.length
+        ap.diameter.magnitude * 0.5,
+        ap.diameter.magnitude * 0.5,
+        ap.length.magnitude
     );
 
     const material = new THREE.MeshStandardMaterial({
