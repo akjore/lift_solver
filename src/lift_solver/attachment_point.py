@@ -1,10 +1,19 @@
 """AttachmentPoint."""
 from typing import Self
 
+import logging
 import numpy as np
 
 from pint import Quantity
 
+logger = logging.getLogger(__name__)
+
+
+
+REQUIRES_AXIS = {
+    "pin",
+    "padeye",
+}
 
 class AttachmentPoint:
     """Represents a single attachment point on a rigid body."""
@@ -14,15 +23,46 @@ class AttachmentPoint:
             id: str,
             parent: str,
             position_local: list,
+            type: str | None = None,
             axis_local: list | None = None,
-            radius: Quantity | None = None
+#            radius: Quantity | None = None,
+            **kwargs,
         ) -> None:
         """Create a new Attachment Point. Minimum input is an id, a parent, and a position."""
         self.id = id
         self.parent = parent
         self.position_local = position_local
-        self.axis_local = None if axis_local is None else np.asarray(axis_local)
-        self.radius = radius
+
+#        self.axis_local = None
+#        self.type = None
+        self.axis_local = axis_local
+        self.type = type
+#        self.axis_local = None if axis_local is None else np.asarray(axis_local)
+#        self.type = type
+#        self.radius = radius
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+#        del self["axis"]
+#        setattr(self, "axis_local", kwargs.get("axis_local"))
+#        setattr(self, "axis_local", kwargs.get("axis"))
+
+        if self.axis_local is not None:
+            self.axis_local = np.asarray(self.axis_local)
+#        else:
+#            self.axis_local = np.asarray([1, 0, 0])
+#            logger.warning("Setting default axis for attachment point")
+
+        # Input validation
+        if self.type in REQUIRES_AXIS and self.axis_local is None:
+            raise ValueError(
+                f"Attachment point '{self.id}' of type '{self.type}' requires an axis."
+            )
+
+
+#        print(f"id: {id}, parent: {parent}, axis: {self.axis_local}")
+
 
     def global_position(self: Self) -> np.array(3):
         """Return global position of AttachmentPoint."""
@@ -37,5 +77,42 @@ class AttachmentPoint:
     def global_axis(self: Self) -> np.array(3):
         """Return global axis of AttachmentPoint."""
         R = self.parent.global_rotation()
+
+        if self.axis_local is None:
+            return None
+
         axis = R @ self.axis_local
         return axis / np.linalg.norm(axis)
+
+    def to_dict(self: Self) -> dict:
+        """Return a dict representation of the class."""
+
+        data = {
+            "id": self.id,
+            "parent": self.parent.id,
+            "position_local": self.position_local.tolist(),
+            "axis_local": self.axis_local,
+        }
+
+        for field in (
+            "type",
+            "hole_diameter",
+            "outer_diameter",
+            "thickness",
+            "diameter",
+            "length",
+        ):
+            value = getattr(self, field, None)
+
+            if value is not None:
+                data[field] = value
+
+        return data
+
+#        return {
+#            "id": self.id,
+#            "parent": self.parent.id,
+#            "position_local": self.position_local.tolist(),
+#            "axis_local": None if self.axis_local is None else self.axis_local.tolist(),
+#            "radius": self.radius,
+#        }

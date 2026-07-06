@@ -1,8 +1,10 @@
 import { initRenderer, renderProblem } from "./renderer.js";
-import { solveProblem, initializePyodide } from "./solver.js";
+import { loadProblem, solveProblem, initializePyodide } from "./solver.js";
 
 let problemData = null;
 let pyodide;
+
+let problemYaml = null;
 
 // --------------------------------------------------
 // Load default YAML from assets
@@ -16,19 +18,13 @@ async function loadDefaultYaml() {
     }
 
     const text = await response.text();
+    problemYaml = text;
 
-    problemData = jsyaml.load(text);
-
-    console.log("Problem loaded:", problemData);
-
-    // Optional: display JSON in <pre>
-    const output = document.getElementById("output");
-    if (output) {
-      output.textContent = JSON.stringify(problemData, null, 2);
-    }
+    const problemJson = await loadProblem(problemYaml, pyodide);
+    console.log(problemJson);
 
     // Trigger rendering
-    renderProblem(problemData);
+    await renderProblem(problemJson);
 
   } catch (err) {
     console.error("YAML load error:", err);
@@ -56,13 +52,14 @@ function setupFileUpload() {
 
       console.log("Uploaded YAML:", problemData);
 
+//      console.log()
 //      const output = document.getElementById("output");
 //      if (output) {
 //        output.textContent = JSON.stringify(problemData, null, 2);
 //      }
 
       // Re-render
-      renderProblem(problemData);
+//      renderProblem(problemData);
     };
 
     reader.readAsText(file);
@@ -72,9 +69,9 @@ function setupFileUpload() {
 
 async function run(problem) {
 
-  renderProblem(problem);
+//  renderProblem(problem);
 
-  const result = await solveProblem(problem, pyodide);
+  const result = await solveProblem(problemYaml, pyodide);
 
   console.log("Solver result:", result);
 
@@ -84,29 +81,23 @@ async function run(problem) {
 // --------------------------------------------------
 // Init app
 // --------------------------------------------------
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
 
   console.log("App starting...");
 
-  // 1. Init Three.js renderer
-  initRenderer("canvas");
-
-  // 2. Enable optional file upload
-  setupFileUpload();
-
-  // 3. Auto-load default YAML
-  loadDefaultYaml();
-});
-
-
-
-async function init() {
   pyodide = await loadPyodide();
   await initializePyodide(pyodide);
 
-  document.getElementById("solveBtn").addEventListener("click", runSolver);
+  initRenderer("canvas");
+
+  setupFileUpload();
+
+  console.log("Loading default yaml.")
+  loadDefaultYaml();
+
   console.log("Ready.");
-}
+});
+
 
 async function runSolver() {
 
@@ -117,5 +108,9 @@ async function runSolver() {
   console.log("Result:", result);
 }
 
-init();
-
+function registerObject(id, object) {
+    world.objectMap.set(
+        id,
+        object
+    );
+}

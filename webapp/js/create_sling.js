@@ -29,7 +29,8 @@ export function createSling(sling, world) {
 
     slingGroup.userData = {
         id: sling.id,
-        type: "sling"
+        type: "sling",
+        data: sling
     };
 
     const points = [];

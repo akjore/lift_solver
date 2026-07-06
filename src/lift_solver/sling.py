@@ -41,6 +41,7 @@ class Rope:
         self.id = id
         self.d = 0 * ureg.millimeter
         self.ea = 0 * ureg.newton
+        self.rope_kind = None
 
 
     def _estimate_mbl(self: Self, kind: RopeKinds, diameter: float) -> float:
@@ -118,6 +119,12 @@ class Rope:
     @mass_per_length.setter
     def mass_per_length(self: Self, value: float) -> None:
         self._mass_per_length = value
+
+    def to_dict(self: Self) -> dict:
+        return {
+            "id": self.id,
+            "diameter": self.diameter,
+        }
 
 
 class Sling(Rope):
@@ -300,3 +307,16 @@ class Sling(Rope):
     def _estimate_eye_splice(self: Self) -> float:
         return 16 * self.diameter if self.diameter else 1. * ureg.meter
 
+
+    def to_dict(self: Self) -> dict:
+        ret = super().to_dict()
+        ret["rope_kind"] = self.kind.name
+        ret["end_a"] = self.end_a.to_dict()
+        ret["end_b"] = self.end_b.to_dict()
+        ret["sheaves"] = [s.to_dict() for s in self.sheaves]
+        ret["length_splice_a"] = self.length_splice_a
+        ret["length_splice_b"] = self.length_splice_b
+        ret["length_eye_a"] = self.length_eye_a
+        ret["length_eye_b"] = self.length_eye_b
+
+        return ret

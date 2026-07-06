@@ -7,46 +7,53 @@ const stlLoader = new STLLoader();
 
 
 export async function createBody(body) {
-    // create groups
-    const bodyGroup = new THREE.Group();
-    bodyGroup.name = body.id;
+  // create groups
+  const bodyGroup = new THREE.Group();
+  bodyGroup.name = body.id;
 
-    bodyGroup.userData = {
-        id: body.id,
-        type: "body"
-    };
+  bodyGroup.userData = {
+    id: body.id,
+    type: "body",
+    data: body
+  };
 
+  createGenericBody(body, bodyGroup);
+
+  return bodyGroup;
+}
+
+export async function createGenericBody(obj, group) {
     const attachmentPoints = new THREE.Group();
     attachmentPoints.name = "attachmentPoints";
-    bodyGroup.add(attachmentPoints);
+    group.add(attachmentPoints);
 
     // set transformation of body and children
-    const m = matrix4From3x3(body.rotation);
+    const m = matrix4From3x3(obj.rotation);
 
-    bodyGroup.position.set(...body.position);
-    bodyGroup.setRotationFromMatrix(m);
+    group.position.set(...obj.position);
+    group.setRotationFromMatrix(m);
 
     // draw coordinate system marker at CoG
-    bodyGroup.add(drawCoG(body.cog));
+    group.add(drawCoG(obj.cog));
 
     // draw attachment points
-    for (const point of body.attachment_points) {
+    for (const point of obj.attachment_points) {
         const ap = createAttachmentPoint(point);
         attachmentPoints.add(ap);
     }
 
     const visualGroup = new THREE.Group();
-    visualGroup.position.set(...body.cog);
-    bodyGroup.add(visualGroup);
+    visualGroup.position.set(...obj.cog);
+    group.add(visualGroup);
 
-    if (body.visual) {
-      const visual = await drawBodyVisual(bodyGroup, body.visual);
+    if (obj.visual) {
+      const visual = await drawBodyVisual(group, obj.visual);
       if (visual) {
         visualGroup.add(visual);
       }
     }
 
-    return bodyGroup;
+//    return group;
 }
 
 function drawCoG(cog) {

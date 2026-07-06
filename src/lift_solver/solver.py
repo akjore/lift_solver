@@ -1,5 +1,4 @@
 import logging
-import math
 
 import numpy as np
 
@@ -12,7 +11,7 @@ from .sling import Sling
 from .attachment_point import AttachmentPoint
 from .constraint import World, PinConstraint
 
-from . import ureg, Q_
+from . import ureg
 # Exudyn units: SI
 # Forces in N
 # Mass in kg
@@ -34,19 +33,20 @@ def solve(problem, simulation_duration, time_step):
     mbs = SC.AddSystem()
 
     # Create world reference system
-    ground = setup_ground(mbs)
+    ground = create_ground(mbs)
 
     # Create model
     setup_from_problem(ground, problem)
 
     # Add damping
-    setup_damping(mbs, ground, problem)
+    create_damping(mbs, ground, problem)
 
     # Add sensors
-    setup_sensors(mbs, problem)
+    create_sensors(mbs, problem)
 
     # Solve
     run_solver(mbs, simulation_duration=simulation_duration, time_step=time_step)
+#    run_solver_to_equillibrium(mbs, simulation_duration=simulation_duration, time_step=time_step)
 
     # Return results
     get_sensor_results(mbs, problem)
@@ -81,18 +81,18 @@ def setup_from_problem(ground, problem):
 
     # Create and place the objects
     for o in problem.objects.values():
-        setup_body(mbs, g, o)
+        create_body(mbs, g, o)
 
     for sl in problem.rigging.values():
         if isinstance(sl, Sling):
-            setup_sling(mbs, g, sl, representative_mass)
+            create_sling(mbs, g, sl, representative_mass)
 
     # Apply constraints
     for constraint in problem.connections.values():
-        setup_constraint(mbs, ground, constraint)
+        create_constraint(mbs, ground, constraint)
 
 
-def setup_body(mbs, g: np.array, body: RigidBody):
+def create_body(mbs, g: np.array, body: RigidBody):
     mass = body.mass.to("kg").magnitude
     cog = body.cog.to("m").magnitude
 
@@ -143,10 +143,10 @@ def setup_body(mbs, g: np.array, body: RigidBody):
     )
 
     for att in body.attachment_points.values():
-        m = setup_attachment_point(body_number=body_number, attachment_point=att)
+        m = create_attachment_point(body_number=body_number, attachment_point=att)
 
 
-def setup_sling(mbs, g, sling, representative_mass):
+def create_sling(mbs, g, sling, representative_mass):
     ea = sling.ea.to("N").magnitude
     d = sling.diameter.to("m").magnitude
     l_ultimate = sling.l_ultimate.to("m").magnitude
@@ -189,7 +189,7 @@ def setup_sling(mbs, g, sling, representative_mass):
     )
 
 
-def setup_attachment_point(body_number: int, attachment_point: AttachmentPoint):
+def create_attachment_point(body_number: int, attachment_point: AttachmentPoint):
     m = mbs.AddMarker(
         exu.utilities.MarkerBodyRigid(
             name = attachment_point.id,
@@ -256,7 +256,7 @@ def compute_rope_damping(EA, L0, mass, safety_factor=0.8):
     return damping_rope_fac
 
 
-def setup_ground(mbs):
+def create_ground(mbs):
     g_ground = graphics.CheckerBoard(point=[0,0,0], normal = [0,0,1], size=60, nTiles=12)
     ground = mbs.AddObject(
         exu.utilities.ObjectGround(
@@ -268,7 +268,7 @@ def setup_ground(mbs):
     return ground
 
 
-def setup_constraint(mbs, ground, constraint):
+def create_constraint(mbs, ground, constraint):
     def create_marker(ground: int, parent: str, ap: AttachmentPoint):
         m = mbs.AddMarker(
             exu.utilities.MarkerBodyRigid(
@@ -284,8 +284,7 @@ def setup_constraint(mbs, ground, constraint):
     if isinstance(constraint, PinConstraint):
         return create_pin_constraint(mbs, ground, constraint)
     else:
-        return setup_generic_constraint(mbs, ground, constraint)
-
+        return create_generic_constraint(mbs, ground, constraint)
 
 
 def create_pin_constraint(mbs, ground, constraint):
@@ -343,7 +342,7 @@ def create_pin_constraint(mbs, ground, constraint):
     )
 
 
-def setup_generic_constraint(mbs, ground, constraint):
+def create_generic_constraint(mbs, ground, constraint):
     def create_marker(ground: int, parent: str, ap: AttachmentPoint):
         m = mbs.AddMarker(
             exu.utilities.MarkerBodyRigid(
@@ -382,7 +381,7 @@ def setup_generic_constraint(mbs, ground, constraint):
     )
 
 
-def setup_damping(mbs, ground, problem):
+def create_damping(mbs, ground, problem):
     """Add damping to quell body movements."""
 
     # For each body, add a damper between body and ground
@@ -418,7 +417,7 @@ def get_global_position(mbs, body, local_position):
     )
 
 
-def setup_sensors(mbs, problem):
+def create_sensors(mbs, problem):
     """Specify sensors."""
 
     for body in problem.objects.values():
@@ -531,7 +530,6 @@ def compute_residuals(mbs, bodies):
             [Izx, Iyz, Izz],
         ])
 
-
         # Get the final kinematic state
         acc = np.array(mbs.GetNodeOutput(n, exu.OutputVariableType.Acceleration))
         vel = np.array(mbs.GetNodeOutput(n, exu.OutputVariableType.Velocity))
@@ -605,8 +603,15 @@ def post_step_user_function(mbs, t):
     if step % STEP_INTERVAL == 0:
         f_res, m_res, v_res = compute_residuals(mbs, prb.objects.values())
         mbs.sys["v_res"] = v_res
+
+#        mbs.sys["f_res"] = f_res
     else:
-        v_res = mbs.sys.get("v_res", 0.0)
+#        v_res = mbs.sys.get("v_res", 0.0)
+
+#        f_res = mbs.sys.get("f_res", 0.0)
+        v_res = mbs.sys.get("v_res", 1e6)
+
+#        f_res = mbs.sys.get("f_res", 1e6)
 
     # adaptive damping
     if v_res > 0.5:
@@ -623,7 +628,12 @@ def post_step_user_function(mbs, t):
         coords_t *= (1 - factor)
         mbs.systemData.SetODE2Coordinates_t(coords_t)
 
-    return True
+#    return True
+    equilibrium = v_res < 1e-2 #and f_res < 1e-3
+#    print(f"equilibrium: {equilibrium}, v_res: {v_res}, f_res: {f_res}, t: {t}")
+#    print(f"equilibrium: {equilibrium}, v_res: {v_res}, t: {t}")
+    return not equilibrium
+#    return not (v_res < 1e-2 and f_res < 1e-3)
 
 
 def run_solver(mbs, simulation_duration, time_step):
@@ -673,48 +683,6 @@ def run_solver(mbs, simulation_duration, time_step):
     SC.renderer.Stop()
 
 
-#def export_initial_state(mbs, problem):
-#    """
-#    Export solved state from Exudyn, formatted as YAML initial_state block with units.
-#    """
-
-#    lines = []
-#    lines.append("initial_state:")
-#    lines.append("  # format: [x, y, z, roll, pitch, yaw]")
-
-#    def format_entry(obj):
-#        body_number = mbs.GetObjectNumber(obj.id)
-#        pos, R = get_body_state(mbs, body_number)
-
-#        if obj.parent:
-#            # Process a child - export relative to parent
-#            body_number_parent = mbs.GetObjectNumber(obj.parent.id)
-#            pos_parent, R_parent = get_body_state(mbs, body_number_parent)
-
-#            pos = R_parent.T @ (pos - pos_parent)
-#            R_rel = R_parent.T @ R
-#            euler = rotation_matrix_to_euler(R_rel)
-#        else:
-#            # Processing a root object
-#            euler = rotation_matrix_to_euler(R)
-
-#        values = [
-#            f"{pos[0]:.6g} m",
-#            f"{pos[1]:.6g} m",
-#            f"{pos[2]:.6g} m",
-#            f"{euler[0]:.6g} deg",
-#            f"{euler[1]:.6g} deg",
-#            f"{euler[2]:.6g} deg",
-#        ]
-
-#        return "[" + ", ".join(values) + "]"
-
-#    # bodies
-#    for body in problem.objects.values():
-#        lines.append(f"  {body.id}: {format_entry(body)}")
-
-#    return "\n".join(lines)
-
 def export_initial_state(mbs, problem):
     """
     Export solver state into YAML-ready initial_state block.
@@ -745,13 +713,21 @@ def export_initial_state(mbs, problem):
 
             euler = rotation_matrix_to_euler(R_global)
 
+#            values = [
+#                f"{p_global[0]:.6g} m",
+#                f"{p_global[1]:.6g} m",
+#                f"{p_global[2]:.6g} m",
+#                f"{euler[0]:.6g} deg",
+#                f"{euler[1]:.6g} deg",
+#                f"{euler[2]:.6g} deg",
+#            ]
             values = [
-                f"{p_global[0]:.6g} m",
-                f"{p_global[1]:.6g} m",
-                f"{p_global[2]:.6g} m",
-                f"{euler[0]:.6g} deg",
-                f"{euler[1]:.6g} deg",
-                f"{euler[2]:.6g} deg",
+                f"{p_global[0]:.8g} m",
+                f"{p_global[1]:.8g} m",
+                f"{p_global[2]:.8g} m",
+                f"{euler[0]:.8g} deg",
+                f"{euler[1]:.8g} deg",
+                f"{euler[2]:.8g} deg",
             ]
 
         # --- CHILD: export relative ---

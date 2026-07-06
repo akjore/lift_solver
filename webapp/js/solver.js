@@ -1,17 +1,40 @@
 const DEV_MODE = true;
 
-export async function solveProblem(problem, pyodide) {
-
-  const problemJSON = JSON.stringify(problem);
-
-  pyodide.globals.set("problem_data", problemJSON);
+export async function loadProblem(problem, pyodide) {
+  pyodide.globals.set("problem", problem);
 
   const resultJSON = await pyodide.runPythonAsync(`
 import json
-from lift_solver.solver import solve
+from lift_solver.lift_problem import LiftProblem
 
-problem = json.loads(problem_data)
-result = solve(problem)
+prb = LiftProblem().from_yaml(problem)
+
+json.dumps(prb.to_render_model())
+`);
+
+  return JSON.parse(resultJSON);
+}
+
+export async function solveProblem(problem, pyodide) {
+
+//  const problemJSON = JSON.stringify(problem);
+
+//  pyodide.globals.set("problem_data", problemJSON);
+  pyodide.globals.set("problem", problem);
+
+  const resultJSON = await pyodide.runPythonAsync(`
+#import json
+#from lift_solver.solver import solve
+#import lift_solver
+# from lift_solver.lift_solver import solve_problem
+#import lift_solver
+from lift_solver import shackle
+
+#problem = json.loads(problem_data)
+#result = solve(problem)
+result = solve_problem(
+    problem = problem,
+  )
 
 json.dumps(result)
 `);
@@ -21,15 +44,24 @@ json.dumps(result)
 
 export async function initializePyodide(pyodide) {
   console.log("Initializing pyodide");
-//  const resultJSON = await pyodide.runPythonAsync(`
-//import sys
-//sys.path.append("/src")
-//`);
+  await pyodide.loadPackage("micropip");
 
-  loadSolver(pyodide);
-  await pyodide.loadPackage("numpy");
-  await pyodide.loadPackage("scipy")
+  const resultJSON = await pyodide.runPythonAsync(`
+import micropip
+import sys
+sys.path.append("/")
+
+await micropip.install("numpy")
+await micropip.install("numpy-stl")
+#await micropip.install("exudyn")
+await micropip.install("pyyaml")
+await micropip.install("pint")
+`);
+
+  await loadSolver(pyodide);
+  console.log("Pyodide initialized.")
 }
+
 
 async function loadSolver(pyodide) {
   console.log("Loading solver");
@@ -41,27 +73,61 @@ async function loadSolver(pyodide) {
   }
 }
 
-async function loadSolverFromSource(pyodide) {
+export async function loadSolverFromSource(pyodide) {
 
-  console.log("Loading from source");
-  const manifest = await fetch("/src/lift_solver/manifest.json")
-    .then(r => r.json());
+    const manifest = await fetch("/manifest.json")
+        .then(r => r.json());
 
-  pyodide.FS.mkdirTree("/lift_solver");
+    for (const sourcePath of manifest.files) {
 
-  for (const file of manifest.files) {
-    const code = await fetch(`/src/lift_solver/${file}`)
-      .then(r => r.text());
+        const response = await fetch(sourcePath);
 
-    pyodide.FS.writeFile(`/lift_solver/${file}`, code);
-  }
+        if (!response.ok) {
+            throw new Error(
+                `Failed to load ${sourcePath}`
+            );
+        }
 
-  await pyodide.runPythonAsync(`
-import sys
-sys.path.append("/")
-`);
+        const content = await response.text();
+
+        // Remove leading src/
+
+        const targetPath = sourcePath.replace(/^\/?src\//, "/");
+
+        ensureDirectory(pyodide, targetPath);
+
+        pyodide.FS.writeFile(
+            targetPath,
+            content
+        );
+
+        console.log(`Loaded ${targetPath}`);
+    }
 }
 
+function ensureDirectory(pyodide, filePath) {
+
+    const parts = filePath.split("/");
+
+    // Remove filename
+    parts.pop();
+
+    let current = "";
+
+    for (const part of parts) {
+
+        if (!part) continue;
+
+        current += "/" + part;
+
+        try {
+            pyodide.FS.mkdir(current);
+        }
+        catch (err) {
+            // Directory already exists
+        }
+    }
+}
 
 async function loadSolverFromWheel(pyodide) {
 

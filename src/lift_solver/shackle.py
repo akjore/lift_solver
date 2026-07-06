@@ -11,9 +11,10 @@ from . import Q_, ureg
 from .attachment_point import AttachmentPoint
 from .constraint import PinConstraint
 from .rigid_body_base import RigidBodyBase
-from .visual_geometry import Mesh
+from .visual_geometry import MeshVisual
 
 logger = logging.getLogger(__name__)
+PACKAGE_ROOT = Path(__file__).parent
 
 
 class Transform:
@@ -113,13 +114,12 @@ class Shackle(RigidBodyBase):
         self.transform = Transform()
 
         if self.id:
-            self.mesh = Mesh(
+            self.visual = MeshVisual(
                 file = "lift_solver/data/shackles/shackle_gp800.stl",
                 scale = self._visual_scale / 1000,
                 rotation = self._stl_to_shackle_rotation(),
-                translation = self._stl_to_shackle_offset()
+                translation = self._stl_to_shackle_offset() - self.cog,
             )
-
 
     def global_rotation(self: Self) -> np.array(3):
         """Return global rotation of shackle."""
@@ -177,7 +177,8 @@ class Shackle(RigidBodyBase):
     def connect_pin_to(self: Self, target: AttachmentPoint) -> PinConstraint:
         """Move shackle pin such that it coincides with target, and pin aligns with hole axis."""
         constraint = None
-        if target:
+
+        if target and target.axis_local is not None:
             if self.parent is not None:
                 self.parent.remove_child(self)
 
@@ -214,6 +215,10 @@ class Shackle(RigidBodyBase):
                 ap2 = target,
             )
             constraint.validate()
+        elif target and target.axis_local is None:
+            raise ValueError(
+                f"Shackle {self.id}: target attachment point {target.id} must have an axis when connecting a shackle"
+            )
         else:
             logger.debug("No target specified - skipping.")
         return constraint
@@ -376,6 +381,9 @@ class Shackle(RigidBodyBase):
 
         return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
         """
+        if vec1 is None or vec2 is None:
+            return np.eye(3)
+
         a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
         v = np.cross(a, b)
         if any(v): #if not all zeros then
@@ -385,6 +393,15 @@ class Shackle(RigidBodyBase):
             return np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
 
         return np.eye(3)
+
+
+    def to_dict(self: Self) -> dict:
+        """Set body values based on values proviced in dict."""
+        ret = super().to_dict()
+        ret["model"] = self.model
+        ret["wll"] = self.wll
+
+        return ret
 
 
 class BaseAdapter:
@@ -425,7 +442,7 @@ class CrosbyAdapter(BaseAdapter):
     def __init__(self: Self) -> None:
         """Initialize."""
         super().__init__(
-            resource_path = "lift_solver/data/shackles",
+            resource_path = PACKAGE_ROOT / "data" / "shackles",
             filename = "crosby_shackles.csv",
         )
 
@@ -453,7 +470,7 @@ class GnAdapter(BaseAdapter):
     def __init__(self: Self) -> None:
         """Initialize."""
         super().__init__(
-            resource_path = "lift_solver/data/shackles",
+            resource_path = PACKAGE_ROOT / "data" / "shackles",
             filename = "gn_shackles.csv",
         )
 
@@ -481,8 +498,8 @@ class GreenPinAdapter(BaseAdapter):
     def __init__(self: Self) -> None:
         """Initialize."""
         super().__init__(
-            resource_path = "lift_solver/data/shackles",
-            filename = "gp_shackles.csv",
+             resource_path = PACKAGE_ROOT / "data" / "shackles",
+           filename = "gp_shackles.csv",
         )
 
     def map_row(self: Self, row: dict) -> Shackle:

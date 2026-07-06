@@ -4,6 +4,7 @@ from typing import Self
 import numpy as np
 
 from . import ureg
+from .visual_geometry import Visual
 
 
 class RigidBodyBase:
@@ -134,3 +135,18 @@ class RigidBodyBase:
         ])
 
         return Rz @ Ry @ Rx
+
+
+    def to_dict(self):
+        """Create a dict representation of the class."""
+        return {
+            "id": self.id,
+            "type": self.__class__.__name__,
+            "position": self.global_position().tolist(),
+            "rotation": self.global_rotation().tolist(),
+            "cog": self.cog.tolist(),
+            "mass": self.mass,
+            "children": [c.id for c in self.children],
+            "attachment_points": [a.to_dict() for a in self.attachment_points.values()],
+            "visual": self.visual.to_dict() if isinstance(self.visual, Visual) else self.visual,
+        }

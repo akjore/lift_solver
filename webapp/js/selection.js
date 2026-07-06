@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { updatePropertiesPanel } from "./properties.js";
+import { highlightTreeItem } from "./tree.js";
 
 let selectedObject = null;
 
@@ -45,6 +47,9 @@ export function selectObject(object) {
         object.userData.id,
         object.userData.type
     );
+
+    updatePropertiesPanel(object);
+    highlightTreeItem(object.userData.id);
 }
 
 export function getSelectedObject() {
@@ -65,4 +70,30 @@ export function findSelectable(object) {
     }
 
     return null;
+}
+
+export function requestZoom(object) {
+
+    document.dispatchEvent(
+        new CustomEvent(
+            "zoomToObject",
+            {
+                detail: object
+            }
+        )
+    );
+}
+
+function zoomSelectedObject(object) {
+
+    selectObject(object);
+
+    document.dispatchEvent(
+        new CustomEvent(
+            "zoomToObject",
+            {
+                detail: object
+            }
+        )
+    );
 }

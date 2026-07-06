@@ -16,12 +16,36 @@ from .sling import Sling
 logger = logging.getLogger(__name__)
 
 
+#QUANTITY_KEYS = {
+#    "position",
+#    "cog",
+#    "mass",
+#    "diameter",
+#    "length",
+#    "hole_diameter",
+#    "outer_diameter",
+#    "thickness",
+#    "size",
+#}
+
+NON_QUANTITY_KEYS = {
+    "id",
+    "type",
+    "stl",
+    "catalogue",
+    "material",
+    "color",
+    "parent",
+}
+
+
 class LiftProblem:
     """Data related to a single lift problem."""
 
     def __init__(self: Self) -> None:
         """Initialize an empty lift problem."""
-        self.objects = {}               # Rigid bodies (including shackles)
+        self.bodies = {}                # Rigid bodies
+        self.shackles = {}              # Shackles
         self.attachment_points = {}     # All attachment points
         self.connections = {}           # Pin joints, etc.
         self.rigging = {}               # All slings and grommets
@@ -78,16 +102,15 @@ class LiftProblem:
         # Optionally update starting positions
         initial_state = problem.get("initial_state")
         if initial_state:
-#            self.parse_initial_state(initial_state)
             self.apply_initial_state(initial_state)
 
 
     def add_body(self: Self, body: dict) -> None:
         """Add a body to the lift problem with the properties given by 'body'."""
         bdy = RigidBody(body["id"])
-        bdy.from_dict(body)
+        bdy.from_dict(**body)
 
-        self.objects[bdy.id] = bdy
+        self.bodies[bdy.id] = bdy
 
         for val in bdy.attachment_points.values():
             key = bdy.id + "." + val.id
@@ -105,7 +128,7 @@ class LiftProblem:
         self.attachment_points[sh.bow.id] = sh.bow
 
         # Add shackle to registry
-        self.objects[sh.id] = sh
+        self.shackles[sh.id] = sh
 
         # If pin_connection specified, move shackle and align pin with attachment point
         pin_connection = shackle.get("pin_connection")
@@ -151,11 +174,11 @@ class LiftProblem:
         self.connections[cn.id] = cn
 
 
-    def normalize_units(self: Self, obj: object) -> object:
+    def normalize_units(self: Self, obj: object, key=None) -> object:
         """Recursively convert YAML-loaded structure into Pint quantities."""
         # --- dict ---
         if isinstance(obj, Mapping):
-            return {k: self.normalize_units(v) for k, v in obj.items()}
+            return {k: self.normalize_units(v, k) for k, v in obj.items()}
 
         # --- list / tuple ---
         elif isinstance(obj, Sequence) and not isinstance(obj, str | bytes):
@@ -166,7 +189,7 @@ class LiftProblem:
                 return [self.normalize_units(v) for v in obj]
 
         # --- scalar ---
-        elif isinstance(obj, str):
+        elif isinstance(obj, str) and key not in NON_QUANTITY_KEYS:
             try:
                 return self.parse_quantity(obj)
             except pint.UndefinedUnitError:
@@ -200,38 +223,6 @@ class LiftProblem:
         return isinstance(value, int | float | str)
 
 
-#    def parse_initial_state(self: Self, initial_state_dict):
-#        """Apply initial_state overrides to problem objects."""
-
-#        for obj_id, values in initial_state_dict.items():
-#            if len(values) != 6:
-#                raise ValueError(f"{obj_id}: expected 6 values [x, y, z, rx, ry, rz]")
-
-#            x, y, z, rx, ry, rz = values
-#            position = Q_.from_list([x, y, z])
-#            orientation = Q_.from_list([rx, ry, rz])
-
-#            obj = self.objects[obj_id]
-
-#            if obj.parent is None:
-#                # absolute
-#                obj.set_pose(
-##                    position = position,
-#                    orientation = orientation,
-#                )
-#            else:
-#                # relative
-#                parent = obj.parent
-
-#                R_parent = parent.rotation
-#                p_parent = parent.position
-
-#                R_rel = parsed rotation
-#                p_rel = parsed position
-
-#                obj.rotation = R_parent @ R_rel
-#                obj.position = p_parent + R_parent @ p_rel
-
     def apply_initial_state(self: Self, initial_state: dict):
         """
         Apply initial_state using RigidBodyBase methods.
@@ -243,23 +234,11 @@ class LiftProblem:
 
         resolved = set()
 
-#        def get_obj(obj_id):
-#            return problem.get_object(obj_id)
-
         def parse_pose(values):
             # [x, y, z, rx, ry, rz] with units
             x, y, z, rx, ry, rz = values
 
-#            position = np.array([
-#                x.to("m").magnitude,
-#                y.to("m").magnitude,
-#                z.to("m").magnitude
-#            ])
-
             position = Q_.from_list([x, y, z])
-
-            # pass raw quantity list to your existing method
-#            orientation = [rx, ry, rz]
             orientation = Q_.from_list([rx, ry, rz])
 
             return position, orientation
@@ -274,7 +253,6 @@ class LiftProblem:
                 if obj_id in resolved:
                     continue
 
-#                obj = get_obj(obj_id)
                 obj = self.objects[obj_id]
 
                 # --- ROOT: absolute pose ---
@@ -311,3 +289,61 @@ class LiftProblem:
                 raise RuntimeError(
                     f"Could not resolve initial_state; unresolved: {unresolved}"
                 )
+
+    def to_render_model(self):
+#        target_unit_length = "m"
+#        target_unit_mass = "kg"
+        return {
+            "bodies": [self._render_dict(obj) for obj in self.bodies.values()],
+            "shackles": [self._render_dict(obj) for obj in self.shackles.values()],
+            "rigging": [self._render_dict(obj) for obj in self.rigging.values()]
+        }
+
+    def _render_dict(self, obj):
+        d = obj.to_dict()
+        return cnv_quantity(d)
+
+
+def cnv_quantity(value):
+    if isinstance(value, dict):
+        return {
+            k: cnv_quantity(v)
+            for k, v in value.items()
+        }
+
+    if isinstance(value, (list, tuple)):
+        return [
+            cnv_quantity(v)
+            for v in value
+        ]
+
+    if isinstance(value, np.ndarray):
+        return cnv_quantity(value.tolist())
+
+    if isinstance(value, pint.Quantity) and isinstance(value.magnitude, np.ndarray):
+        return cnv_quantity(value.tolist())
+
+    if isinstance(value, pint.Quantity):
+
+        # Lengths → m
+        if value.check("[length]"):
+            return float(
+                value.to("m").magnitude
+            )
+
+        # Masses → kg
+        if value.check("[mass]"):
+            return float(
+                value.to("kg").magnitude
+            )
+
+        # Angles → rad
+        if value.check("[]"):
+            return float(
+                value.to("rad").magnitude
+            )
+
+        # Everything else
+        return float(value.magnitude)
+
+    return value
