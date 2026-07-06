@@ -253,7 +253,9 @@ class LiftProblem:
                 if obj_id in resolved:
                     continue
 
-                obj = self.objects[obj_id]
+                obj = self.bodies.get(obj_id)
+                if obj is None:
+                    obj = self.shackles.get(obj_id)
 
                 # --- ROOT: absolute pose ---
                 if obj.parent is None:
