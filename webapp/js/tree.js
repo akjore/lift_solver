@@ -321,6 +321,26 @@ export function initializeVisibility(world) {
 
         });
 
+    document
+        .getElementById("show-attachment-points")
+        .addEventListener("change", e => {
+                setVisibilityByType(
+                    world.root,
+                    "attachmentPoint",
+                    e.target.checked
+                );
+        });
+
+    document
+        .getElementById("show-cogs")
+        .addEventListener("change", e => {
+                setVisibilityByType(
+                    world.root,
+                    "cogMarker",
+                    e.target.checked
+                );
+        });
+
     const header = document.getElementById("display-header");
     const section = document.getElementById("display-section");
     const arrow = document.getElementById("display-arrow");
@@ -352,4 +372,22 @@ function toggleDisplay(section, arrow) {
     section.hidden = !section.hidden;
 
     arrow.textContent = section.hidden ? "▶" : "▼";
+}
+
+function setVisibilityByType(
+    root,
+    type,
+    visible
+) {
+
+    root.traverse(obj => {
+
+        if (
+            obj.userData?.type === type
+        ) {
+            obj.visible = visible;
+        }
+
+    });
+
 }

@@ -6,7 +6,7 @@ import { TrackballControls } from "https://cdn.jsdelivr.net/npm/three@0.181.1/ex
 import { createBody } from "./create_body.js";
 import { createShackle } from "./create_shackle.js";
 import { createSling } from "./create_sling.js";
-import { findSelectable, requestZoom, selectObject } from "./selection.js";
+import { findSelectable, requestZoom, selectObject, setHoveredObject, clearHover } from "./selection.js";
 import { buildTree, initializeVisibility } from "./tree.js";
 
 let scene, camera, renderer, controls;
@@ -127,6 +127,11 @@ export function initRenderer(containerId = "canvas") {
     document.getElementById("side-button").addEventListener(
         "click",
         viewSide
+    );
+
+    renderer.domElement.addEventListener(
+      "mousemove",
+      onMouseMove
     );
 
     initializeVisibility(world);
@@ -435,4 +440,43 @@ function viewFront() {
 
 function viewSide() {
     setView(new THREE.Vector3(1, 0, 0));
+}
+
+function onMouseMove(event) {
+
+    const rect =
+        renderer.domElement.getBoundingClientRect();
+
+    mouse.x =
+        ((event.clientX - rect.left) /
+         rect.width) * 2 - 1;
+
+    mouse.y =
+        -((event.clientY - rect.top) /
+          rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(
+        mouse,
+        camera
+    );
+
+    const hits =
+        raycaster.intersectObjects(
+            world.pickables,
+            true
+        );
+
+    if (hits.length === 0) {
+
+        clearHover();
+
+        return;
+    }
+
+    const object =
+        findSelectable(
+            hits[0].object
+        );
+
+    setHoveredObject(object);
 }

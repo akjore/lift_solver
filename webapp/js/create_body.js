@@ -61,6 +61,7 @@ function drawCoG(cog) {
   const axes = new THREE.AxesHelper(0.2);
 
   axes.raycast = function () {};
+  axes.userData.type = "cogMarker"
 
   if (cog) {
     axes.position.set(...cog);
