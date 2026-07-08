@@ -60,7 +60,8 @@ class Shackle(RigidBodyBase):
         bow_diameter: float = 0,
         inside_length: float = 0,
         mass: float = 0,
-        sub_type: str = ""
+        sub_type: str = "",
+        safety_factor: float = 1,
     ) -> None:
         """Create a shackle object.
 
@@ -73,8 +74,6 @@ class Shackle(RigidBodyBase):
         """
         super().__init__(id=id)
 
-
-        self.id = id
         self.model = model
         self.manufacturer = manufacturer
         self.wll = wll
@@ -83,6 +82,7 @@ class Shackle(RigidBodyBase):
         self.inside_length = inside_length
         self.mass = mass
         self.sub_type = sub_type
+        self.safety_factor = safety_factor
 
         self.visual = None
 
@@ -90,13 +90,14 @@ class Shackle(RigidBodyBase):
         self.pin_connection = None
         self.rotation_about_pin = Q_("0 deg")
 
-
         self.pin = AttachmentPoint(
             id = self.id + ".pin",
             parent = self,
             position_local = self._pin_ap_position,
             axis_local = self._pin_axis,
-            radius = self.pin_diameter / 2,
+            type = "pin",
+            diameter = self.pin_diameter,
+            length = self.pin_diameter
         )
 
         self.bow = AttachmentPoint(
@@ -104,7 +105,9 @@ class Shackle(RigidBodyBase):
             parent = self,
             position_local = self._bow_ap_position,
             axis_local = self._pin_axis,
-            radius = self.bow_diameter / 2,
+            type = "pin",
+            diameter = self.bow_diameter,
+            length = self.bow_diameter,
         )
 
         self.attachment_points[self.pin.id] = self.pin
@@ -114,8 +117,12 @@ class Shackle(RigidBodyBase):
         self.transform = Transform()
 
         if self.id:
+            file = "lift_solver/data/shackles/shackle_gp800.stl",
+            if self.sub_type == "WideBody":
+                file = "lift_solver/data/shackles/shackle_gp800_wb.stl",
+
             self.visual = MeshVisual(
-                file = "lift_solver/data/shackles/shackle_gp800.stl",
+                file = file,
                 scale = self._visual_scale / 1000,
                 rotation = self._stl_to_shackle_rotation(),
                 translation = self._stl_to_shackle_offset() - self.cog,
@@ -238,6 +245,8 @@ class Shackle(RigidBodyBase):
             bow_diameter = data.bow_diameter,
             inside_length = data.inside_length,
             mass = data.mass,
+            sub_type = data.sub_type,
+            safety_factor = data.safety_factor,
         )
 
     @property
@@ -333,6 +342,16 @@ class Shackle(RigidBodyBase):
 
 
     @property
+    def safety_factor(self: Self) -> float:
+        """Shackle safety factor."""
+        return self._safety_factor
+
+    @safety_factor.setter
+    def safety_factor(self: Self, value: float) -> None:
+        self._safety_factor = value
+
+
+    @property
     def cog(self: Self) -> float:
         """Shackle CoG. Not provided in catalogues - set to reasonable value."""
         return self._pin_ap_position + np.array([0, 0, 1]) * 0.5 * self.inside_length
@@ -350,7 +369,14 @@ class Shackle(RigidBodyBase):
 
     def _stl_to_shackle_rotation(self: Self) -> np.array(3):
         # e.g. STL has pin along Z → rotate to X
-        return np.eye(3)
+        if self.sub_type == "":
+            return np.eye(3)
+        else:
+            return np.array([
+                [1.0, 0.0,  0.0],
+                [0.0, 0.0,  -1.0],
+                [0.0, 1.0, 0.0]
+            ])
 
 
     def _stl_to_shackle_offset(self: Self) -> np.array(3):
@@ -401,6 +427,8 @@ class Shackle(RigidBodyBase):
         ret = super().to_dict()
         ret["model"] = self.model
         ret["wll"] = self.wll
+        ret["mass"] = self.mass
+        ret["safety_factor"] = self.safety_factor
 
         return ret
 
@@ -451,7 +479,7 @@ class CrosbyAdapter(BaseAdapter):
         """Instantiate a shackle based on an entry from Crosby."""
         # Wide body shackles
         bow_diameter = row["J [mm]"]
-        bow_diameter = float(bow_diameter) if bow_diameter else float(float(row["D [mm]"]))
+        bow_diameter = float(bow_diameter) if bow_diameter else float(row["D [mm]"])
 
         return Shackle(
             model = row["Model"],
@@ -462,6 +490,7 @@ class CrosbyAdapter(BaseAdapter):
             inside_length = float(row["C [mm]"]) * ureg.millimeter,
             mass = float(row["Weight Each [kg]"]) * ureg.kg,
             sub_type = row["Subtype"],
+            safety_factor = float(row["SafetyFactor"]),
         )
 
 
@@ -479,7 +508,7 @@ class GnAdapter(BaseAdapter):
         """Instantiate a shackle based on an entry from GN."""
         # Wide body shackles
         bow_diameter = row["G [mm]"]
-        bow_diameter = float(bow_diameter) if bow_diameter else float(float(row["A [mm]"]))
+        bow_diameter = float(bow_diameter) if bow_diameter else float(row["A [mm]"])
 
         return Shackle(
             model = row["Model"],
@@ -490,6 +519,7 @@ class GnAdapter(BaseAdapter):
             inside_length = float(row["D [mm]"]) * ureg.millimeter,
             mass = float(row["Weight [kg]"]) * ureg.kg,
             sub_type = row["Subtype"],
+            safety_factor = float(row["SafetyFactor"]),
         )
 
 
@@ -507,7 +537,7 @@ class GreenPinAdapter(BaseAdapter):
         """Instantiate a shackle based on an entry from GreenPin."""
         # Wide body shackles
         bow_diameter = row["bearing surface L [mm]"]
-        bow_diameter = float(bow_diameter) if bow_diameter else float(float(row["diameter body A [mm]"]))
+        bow_diameter = float(bow_diameter) if bow_diameter else float(row["diameter body A [mm]"])
 
         return Shackle(
             model = row["Model"],
@@ -518,6 +548,7 @@ class GreenPinAdapter(BaseAdapter):
             inside_length = float(row["length inside F [mm]"]) * ureg.millimeter,
             mass = float(row["Net weight [kg]"]) * ureg.kg,
             sub_type = row["Subtype"],
+            safety_factor = float(row["SafetyFactor"]),
         )
 
 

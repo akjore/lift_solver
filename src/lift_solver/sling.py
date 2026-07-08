@@ -5,6 +5,8 @@ from enum import Enum
 from typing import Self
 
 import numpy as np
+import pint
+from scipy.optimize import newton
 
 from . import ureg
 from .attachment_point import AttachmentPoint
@@ -239,7 +241,7 @@ class Sling(Rope):
 
     @property
     def length_eye_b(self: Self) -> float:
-        """Length of eye at end b when bent around a pin of dia 0."""
+        """Length of eye at end b when bent around a pin of dia 0, i.e. not circumferential length of eye."""
         return self._length_eye_b
 
     @length_eye_b.setter
@@ -286,13 +288,42 @@ class Sling(Rope):
                 self.length_splice_b)
 
 
+    @property
+    def eye_a_separation_angle(self: Self) -> pint.Quantity:
+        return self._sling_eye_separation_angle(self.length_eye_a, self.end_a, self.diameter)
+
+
+    @property
+    def eye_b_separation_angle(self: Self) -> pint.Quantity:
+        return self._sling_eye_separation_angle(self.length_eye_b, self.end_b, self.diameter)
+
+
+    @property
+    def eye_a_apex_offset(self: Self) -> pint.Quantity:
+        """Return the distance from the pin centre to the beginning of the splice."""
+        pin_diameter = self.end_a.diameter
+
+        if self.end_a.type == "pin" and pin_diameter:
+            return pin_diameter / 2 / np.cos(self.eye_a_separation_angle/2)
+        return None
+
+
+    @property
+    def eye_b_apex_offset(self: Self) -> pint.Quantity:
+        """Return the distance from the pin centre to the beginning of the splice."""
+        pin_diameter = self.end_b.diameter
+
+        if self.end_b.type == "pin" and pin_diameter:
+            return pin_diameter / 2 / np.cos(self.eye_b_separation_angle/2)
+        return None
+
+
     def _estimate_eye_length(self: Self) -> float:
-        # TODO: update reference to ISO or EN
-        """https://www.unirope.com/sling/single-leg-standard-slings-standard-eyes-and-hd-thimbles/."""
+        """Ref. NS-EN 13414-3."""
         length = None
         if self.diameter:
-            inside_eye_width = 8 * self.diameter
-            inside_eye_length = 16 *  self.diameter
+            inside_eye_width = 7.5 * self.diameter
+            inside_eye_length = 15 * self.diameter
 
             # contact angle
             alpha = math.acos(self.diameter/2 / (inside_eye_length - 0.5 * inside_eye_width))
@@ -305,8 +336,38 @@ class Sling(Rope):
 
 
     def _estimate_eye_splice(self: Self) -> float:
-        return 16 * self.diameter if self.diameter else 1. * ureg.meter
+        """Ref. NS-EN 13414-3."""
+        return 15 * self.diameter if self.diameter else 1. * ureg.meter
 
+
+    def _sling_eye_separation_angle(self: Self, l_eye: float, end: AttachmentPoint, rope_diameter: float) -> float:
+        """Calculate the angle of the point of contact between the sling eye and the sheave."""
+        if end.type == "pin" and end.diameter and rope_diameter:
+            r = end.diameter/2 + rope_diameter/2
+
+            f = lambda x: math.tan(x) - x - l_eye / r + math.pi
+            try:
+                alpha = newton(func=f, x0=math.pi / 2 * 0.99)
+            except Exception:
+                logger.warning(f"{self.name}: could not calculate contact point on end {end}. Setting sensible value.")
+                alpha = math.pi / 2 * 0.9
+            return 2 * alpha * ureg.radians
+        else:
+            return None
+
+
+#    def _distance_sheave_splice(self: Self, l_eye: float, end: AttachmentPoint, rope_diameter: float) -> float:
+#        length = None
+#        if end.type == "pin" and rope_diameter and l_eye >= math.pi * (end.radius + rope_diameter / 2):
+#            r = end.radius + rope_diameter / 2
+#            alpha = self._contact_point(l_eye, end, rope_diameter)
+#            length = math.sqrt(r**2 + (l_eye - r * (math.pi - alpha)) ** 2)
+#        elif not isinstance(end, Circle):
+#            length = l_eye
+#        else:
+#            logger.info(f"{self.name}: sling eye will not fit on end {end}.")
+#            length = end.radius + (rope_diameter / 2 if rope_diameter else 0)
+#        return length
 
     def to_dict(self: Self) -> dict:
         ret = super().to_dict()
@@ -314,9 +375,19 @@ class Sling(Rope):
         ret["end_a"] = self.end_a.to_dict()
         ret["end_b"] = self.end_b.to_dict()
         ret["sheaves"] = [s.to_dict() for s in self.sheaves]
-        ret["length_splice_a"] = self.length_splice_a
-        ret["length_splice_b"] = self.length_splice_b
-        ret["length_eye_a"] = self.length_eye_a
-        ret["length_eye_b"] = self.length_eye_b
+        ret["eye_a"] = {
+            "length_splice": self.length_splice_a,
+            "separation_angle": self.eye_a_separation_angle,
+            "apex_offset": self.eye_a_apex_offset,
+        }
+        ret["eye_b"] = {
+            "length_splice": self.length_splice_b,
+            "separation_angle": self.eye_b_separation_angle,
+            "apex_offset": self.eye_b_apex_offset,
+        }
+#        ret["length_splice_a"] = self.length_splice_a
+#        ret["length_splice_b"] = self.length_splice_b
+#        ret["length_eye_a"] = self.length_eye_a
+#        ret["length_eye_b"] = self.length_eye_b
 
         return ret

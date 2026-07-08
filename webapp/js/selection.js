@@ -27,15 +27,6 @@ export function clearSelection() {
 }
 
 export function selectObject(object) {
-
-    console.log(
-        "selectObject:",
-        selectedObject?.userData?.id,
-        "->",
-        object?.userData?.id
-    );
-
-
 //    clearSelection();
 
     if (selectedObject) {
@@ -158,9 +149,7 @@ export function clearHover() {
 }
 
 function setHighlight(object, highlighted) {
-
     object.traverse(child => {
-
         if (!child.isMesh) {
             return;
         }

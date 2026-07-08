@@ -27,7 +27,9 @@ export function updatePropertiesPanel(object) {
             properties = {
                 Id: data.id,
                 Model: data.model,
-                WLL: formatValue(data.wll)
+                WLL: formatValue(data.wll),
+                Mass: formatValue(data.mass),
+                "Safety factor": data.safety_factor,
             };
             break;
         case "sling":
@@ -42,12 +44,25 @@ export function updatePropertiesPanel(object) {
                 Id: data.id,
                 Type: data.type,
                 Position: formatValue(data.position_local),
-                Axis: data.axis_local
-    };
-
-    break;
-
+                Axis: data.axis_local,
+                Diameter: formatValue(data.diameter),
+                Length: formatValue(data.length),
+                "Hole dia": formatValue(data.hole_diameter),
+                "Outer dia": formatValue(data.outer_diameter),
+                Thickness: formatValue(data.thickness)
+            };
+            break;
     }
+
+    properties = Object.fromEntries(
+        Object.entries(properties)
+            .filter(([_, value]) =>
+                value !== undefined &&
+                value !== null &&
+                value !== ""
+            )
+        );
+
     panel.innerHTML = renderProperties(properties);
 }
 

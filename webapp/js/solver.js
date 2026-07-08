@@ -56,6 +56,7 @@ await micropip.install("numpy-stl")
 #await micropip.install("exudyn")
 await micropip.install("pyyaml")
 await micropip.install("pint")
+await micropip.install("scipy")
 `);
 
   await loadSolver(pyodide);

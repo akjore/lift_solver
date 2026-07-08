@@ -9,7 +9,6 @@ from pint import Quantity
 logger = logging.getLogger(__name__)
 
 
-
 REQUIRES_AXIS = {
     "pin",
     "padeye",
@@ -37,6 +36,16 @@ class AttachmentPoint:
 #        self.type = None
         self.axis_local = axis_local
         self.type = type
+
+        # padeye properties
+        self.hole_diameter = None
+        self.outer_diameter = None
+        self.thickness = None
+
+        # pin properties
+        self.diameter = None
+        self.length = None
+
 #        self.axis_local = None if axis_local is None else np.asarray(axis_local)
 #        self.type = type
 #        self.radius = radius
@@ -92,6 +101,8 @@ class AttachmentPoint:
             "parent": self.parent.id,
             "position_local": self.position_local,
             "axis_local": self.axis_local,
+            "axis_global": self.global_axis(),
+            "position_global": self.global_position(),
         }
 
         for field in (
