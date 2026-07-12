@@ -138,7 +138,7 @@ class LiftProblem:
 
         rotation_about_pin = shackle.get("rotation_about_pin")
         if rotation_about_pin:
-            sh.rotation_about_pin = rotation_about_pin
+            sh.set_rotation_about_pin(rotation_about_pin)
 
         # If shackle pose was provided, use that: Note either position is derived from pin_connnection
         #  and optional pin_rotation, or pose.

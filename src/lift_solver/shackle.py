@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Self
 
 import numpy as np
+import pint
 
 from . import Q_, ureg
 from .attachment_point import AttachmentPoint
@@ -88,7 +89,7 @@ class Shackle(RigidBodyBase):
 
         self.pose = None
         self.pin_connection = None
-        self.rotation_about_pin = Q_("0 deg")
+#        self.rotation_about_pin = Q_("0 deg")
 
         self.pin = AttachmentPoint(
             id = self.id + ".pin",
@@ -117,9 +118,9 @@ class Shackle(RigidBodyBase):
         self.transform = Transform()
 
         if self.id:
-            file = "lift_solver/data/shackles/shackle_gp800.stl",
+            file = "lift_solver/data/shackles/shackle_gp800.stl"
             if self.sub_type == "WideBody":
-                file = "lift_solver/data/shackles/shackle_gp800_wb.stl",
+                file = "lift_solver/data/shackles/shackle_gp800_wb.stl"
 
             self.visual = MeshVisual(
                 file = file,
@@ -128,20 +129,11 @@ class Shackle(RigidBodyBase):
                 translation = self._stl_to_shackle_offset() - self.cog,
             )
 
-    def global_rotation(self: Self) -> np.array(3):
-        """Return global rotation of shackle."""
-        R = super().global_rotation()
 
-        if self.rotation_about_pin:
-            angle = self.rotation_about_pin.to("rad").magnitude
-
-            axis = self.pin.axis_local
-
-            R_flip = self.rot_axis_angle(axis, angle)
-
-            R = R_flip @ R
-
-        return R
+    def set_rotation_about_pin(self: Self, angle: pint.Quantity):
+        axis = self.pin.axis_local
+        R_flip = self.rot_axis_angle(axis, angle)
+        self.rotation = R_flip @ self.rotation
 
 
     @property

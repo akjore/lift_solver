@@ -62,13 +62,13 @@ class Rope:
         if kind in (RopeKinds.IWRC, RopeKinds.HMPE) and mbl:
             diameter = (mbl / 0.064) ** 0.5 / 1000
         elif kind == RopeKinds.CABLE and mbl:
-            diameter = np.interp(mbl, self._CABLE_MBL_t, self._CABLE_DIAMETER_MM) / 1000
+            diameter = np.interp(mbl, self._CABLE_MBL_t, self._CABLE_DIAMETER_MM)
         return diameter
 
 
     def _estimate_area(self: Self, kind: RopeKinds, diameter: float) -> float:
         area = None
-        if diameter and kind in (RopeKinds.IWRC, RopeKinds.CABLE):
+        if diameter and kind in (RopeKinds.IWRC, RopeKinds.CABLE, RopeKinds.HMPE):
             area = 0.68 * math.pi / 4 * diameter**2
         return area
 
@@ -80,7 +80,7 @@ class Rope:
         elif kind == RopeKinds.CABLE and area:
             ea = 0.6 * 128e6 * area
         elif kind == RopeKinds.HMPE and mbl:
-            ea = 30 * 9.81 * mbl
+            ea = 30 * 9.81 * ureg("m/s/s") * mbl.to("t")
         return ea
 
 
@@ -171,7 +171,7 @@ class Sling(Rope):
         #   diameter may be estimated from mbl, or mbl from diameter
 
         self.diameter = diameter if diameter else self._estimate_diameter(self.kind, mbl)
-        self.area = self._estimate_area(self.kind, self._diameter)
+        self.area = self._estimate_area(self.kind, self.diameter)
         self.mbl = mbl if mbl else self._estimate_mbl(self.kind, self._diameter)
 
         self.length_eye_a = length_eye_a if length_eye_a else self._estimate_eye_length()
@@ -356,19 +356,6 @@ class Sling(Rope):
             return None
 
 
-#    def _distance_sheave_splice(self: Self, l_eye: float, end: AttachmentPoint, rope_diameter: float) -> float:
-#        length = None
-#        if end.type == "pin" and rope_diameter and l_eye >= math.pi * (end.radius + rope_diameter / 2):
-#            r = end.radius + rope_diameter / 2
-#            alpha = self._contact_point(l_eye, end, rope_diameter)
-#            length = math.sqrt(r**2 + (l_eye - r * (math.pi - alpha)) ** 2)
-#        elif not isinstance(end, Circle):
-#            length = l_eye
-#        else:
-#            logger.info(f"{self.name}: sling eye will not fit on end {end}.")
-#            length = end.radius + (rope_diameter / 2 if rope_diameter else 0)
-#        return length
-
     def to_dict(self: Self) -> dict:
         ret = super().to_dict()
         ret["rope_kind"] = self.kind.name
@@ -385,9 +372,5 @@ class Sling(Rope):
             "separation_angle": self.eye_b_separation_angle,
             "apex_offset": self.eye_b_apex_offset,
         }
-#        ret["length_splice_a"] = self.length_splice_a
-#        ret["length_splice_b"] = self.length_splice_b
-#        ret["length_eye_a"] = self.length_eye_a
-#        ret["length_eye_b"] = self.length_eye_b
 
         return ret

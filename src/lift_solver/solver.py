@@ -10,6 +10,7 @@ from .rigid_body import RigidBody
 from .sling import Sling
 from .attachment_point import AttachmentPoint
 from .constraint import World, PinConstraint
+from .visual_geometry import BoxVisual, CylinderVisual, MeshVisual
 
 from . import ureg
 # Exudyn units: SI
@@ -49,22 +50,16 @@ def solve(problem, simulation_duration, time_step):
 #    run_solver_to_equillibrium(mbs, simulation_duration=simulation_duration, time_step=time_step)
 
     # Return results
-    get_sensor_results(mbs, problem)
+    results = get_results(mbs, problem)
+    print(results)
+#    get_sensor_results(mbs, problem)
 
     # Export poses (position, orientation)
     state = export_initial_state(mbs, problem)
     print(state)
 
-    max_force, max_moment, max_velocity = compute_residuals(mbs, problem.objects.values())
-    print(f"Max residual force: {max_force}")
-    print(f"Max residual moment: {max_moment}")
+    max_velocity = compute_residuals(mbs, problem.bodies.values())
     print(f"Max residual velocity: {max_velocity}")
-
-    plot_convergence(mbs, problem)
-
-
-#    times, rf, rm = compute_residual_history(mbs, problem)
-#    plot_residuals(times, rf, rm)
 
     # For debug purposes
 #    mbs.Assemble()
@@ -77,12 +72,17 @@ def setup_from_problem(ground, problem):
     g = problem.g.to("m/s/s").magnitude
 
     # Need a representative mass to tune damping coefficients
-    representative_mass = (max([b.mass for b in problem.objects.values() if isinstance(b, RigidBody)]))
+    representative_mass = (max([b.mass for b in problem.bodies.values() if isinstance(b, RigidBody)]))
 
-    # Create and place the objects
-    for o in problem.objects.values():
+    # Create and place the bodies
+    for o in problem.bodies.values():
         create_body(mbs, g, o)
 
+    # Create and place the shackles
+    for o in problem.shackles.values():
+        create_body(mbs, g, o)
+
+    # Create slings between attachment points
     for sl in problem.rigging.values():
         if isinstance(sl, Sling):
             create_sling(mbs, g, sl, representative_mass)
@@ -119,19 +119,6 @@ def create_body(mbs, g: np.array, body: RigidBody):
     graphics_data_list.append(create_graphics(cog, body.visual))
     graphics_data_list.append(graphics.Basis(inertia.COM(), length=0.5))
 
-    # TODO: this should be more general - check if body.mesh exists; if so, use it.
-    if isinstance(body, Shackle):
-        graphics_data_list.append(
-            graphics.FromSTLfile(
-                fileName = body.mesh.file,
-                color = graphics.color.steelblue,
-                density = 0.0,
-                Aoff = body.mesh.rotation,
-                pOff = body.mesh.translation.to("m").magnitude,
-                scale = body.mesh.scale.magnitude,
-            )
-        )
-
     # Create the body
     body_number = mbs.CreateRigidBody(
         name = body.id,
@@ -143,7 +130,7 @@ def create_body(mbs, g: np.array, body: RigidBody):
     )
 
     for att in body.attachment_points.values():
-        m = create_attachment_point(body_number=body_number, attachment_point=att)
+        create_attachment_point(body_number=body_number, attachment_point=att)
 
 
 def create_sling(mbs, g, sling, representative_mass):
@@ -169,7 +156,7 @@ def create_sling(mbs, g, sling, representative_mass):
         r_roll_arm.append(0)
         sheave_axes.Append([1, 0, 0])
 
-    sl = mbs.AddObject(
+    mbs.AddObject(
         exu.utilities.ReevingSystemSprings(
             name = sling.id,
             markerNumbers = markers,
@@ -190,7 +177,7 @@ def create_sling(mbs, g, sling, representative_mass):
 
 
 def create_attachment_point(body_number: int, attachment_point: AttachmentPoint):
-    m = mbs.AddMarker(
+    return mbs.AddMarker(
         exu.utilities.MarkerBodyRigid(
             name = attachment_point.id,
             bodyNumber = body_number,
@@ -198,40 +185,48 @@ def create_attachment_point(body_number: int, attachment_point: AttachmentPoint)
             visualization = exu.utilities.VMarkerBodyRigid(),
         ),
     )
-    return m
 
 
 def create_graphics(cog: np.array, visual: dict):
     gr = None
-    if visual:
-        if visual.get("type") == "box":
-            gr = graphics.Brick(
-                centerPoint = cog + visual["offset"].to("m").magnitude,
-                size = visual["size"].to("m").magnitude,
-                addNormals = False,
-                addEdges = True,
-                addFaces = False,
-                roundness = 0,
-                nTiles = 12,
-            )
+    if isinstance(visual, BoxVisual):
+        gr = graphics.Brick(
+            centerPoint = cog + visual["offset"].to("m").magnitude,
+            size = visual["size"].to("m").magnitude,
+            addNormals = False,
+            addEdges = True,
+            addFaces = False,
+            roundness = 0,
+            nTiles = 12,
+        )
 
-        if visual.get("type") == "cylinder":
-            if visual.get("axis") == "x":
-                ax = [1, 0, 0]
-            elif visual.get("axis") == "y":
-                ax = [0, 1, 0]
-            else:
-                ax = [0, 0, 1]
+    if isinstance(visual, CylinderVisual):
+        if visual.get("axis") == "x":
+            ax = [1, 0, 0]
+        elif visual.get("axis") == "y":
+            ax = [0, 1, 0]
+        else:
+            ax = [0, 0, 1]
 
-            p1 = np.array(ax) * visual.get("length")/2
-            p2 = -p1
+        p1 = np.array(ax) * visual.get("length")/2
+        p2 = -p1
 
-            gr = graphics.Tube(
-                points = [p1, p2],
-                axes = [ax, ax],
-                radius = visual["diameter"]/2,
-                nTiles = 16
-            )
+        gr = graphics.Tube(
+            points = [p1, p2],
+            axes = [ax, ax],
+            radius = visual["diameter"]/2,
+            nTiles = 16
+        )
+
+    if isinstance(visual, MeshVisual):
+        gr = graphics.FromSTLfile(
+            fileName = visual.file,
+            color = graphics.color.steelblue,
+            density = 0.0,
+            Aoff = visual.rotation,
+            pOff = visual.translation.to("m").magnitude + cog,
+            scale = visual.scale,
+        )
 
     return gr
 
@@ -269,18 +264,6 @@ def create_ground(mbs):
 
 
 def create_constraint(mbs, ground, constraint):
-    def create_marker(ground: int, parent: str, ap: AttachmentPoint):
-        m = mbs.AddMarker(
-            exu.utilities.MarkerBodyRigid(
-                name = parent + "." + ap.id,
-                bodyNumber = ground,
-                localPosition = ap.global_position().to("m").magnitude,
-                visualization = exu.utilities.VMarkerBodyRigid(),
-            ),
-        )
-        return m
-
-
     if isinstance(constraint, PinConstraint):
         return create_pin_constraint(mbs, ground, constraint)
     else:
@@ -288,14 +271,13 @@ def create_constraint(mbs, ground, constraint):
 
 
 def create_pin_constraint(mbs, ground, constraint):
-
-    ap1 = constraint.ap1
-    ap2 = constraint.ap2
-
     def get_body(ap):
         if isinstance(ap, World):
             return ground
         return mbs.GetObjectNumber(ap.parent.id)
+
+    ap1 = constraint.ap1
+    ap2 = constraint.ap2
 
     body1 = get_body(ap1)
     body2 = get_body(ap2)
@@ -335,6 +317,7 @@ def create_pin_constraint(mbs, ground, constraint):
         )
 
     return mbs.CreateRevoluteJoint(
+        name = constraint.id,
         bodyNumbers = [body1, body2],
         position = p_joint,
         axis = axis,
@@ -344,7 +327,7 @@ def create_pin_constraint(mbs, ground, constraint):
 
 def create_generic_constraint(mbs, ground, constraint):
     def create_marker(ground: int, parent: str, ap: AttachmentPoint):
-        m = mbs.AddMarker(
+        return mbs.AddMarker(
             exu.utilities.MarkerBodyRigid(
                 name = parent + "." + ap.id,
                 bodyNumber = ground,
@@ -352,7 +335,6 @@ def create_generic_constraint(mbs, ground, constraint):
                 visualization = exu.utilities.VMarkerBodyRigid(),
             ),
         )
-        return m
 
     ap1 = constraint.ap1
     ap2 = constraint.ap2
@@ -368,8 +350,9 @@ def create_generic_constraint(mbs, ground, constraint):
 
         marker_numbers.append(m)
 
-    joint = mbs.AddObject(
+    mbs.AddObject(
         exu.utilities.GenericJoint(
+            name = constraint.id,
             markerNumbers = marker_numbers,
             constrainedAxes = constraint.constraints,
             visualization = exu.utilities.VGenericJoint(
@@ -385,7 +368,8 @@ def create_damping(mbs, ground, problem):
     """Add damping to quell body movements."""
 
     # For each body, add a damper between body and ground
-    for body in problem.objects.values():
+    obj = problem.bodies | problem.shackles
+    for body in obj.values():
         # Get body number from name
         b = mbs.GetObjectNumber(body.id)
 
@@ -395,7 +379,7 @@ def create_damping(mbs, ground, problem):
         cog_global = get_global_position(mbs, b, cog_local)
 
         # Create a damper
-        oSD = mbs.CreateSpringDamper(
+        mbs.CreateSpringDamper(
             bodyNumbers = [ground, b],
             localPosition0 = cog_global,
             localPosition1 = cog_local,
@@ -420,12 +404,12 @@ def get_global_position(mbs, body, local_position):
 def create_sensors(mbs, problem):
     """Specify sensors."""
 
-    for body in problem.objects.values():
+    for body in problem.bodies.values():
         b = mbs.GetObjectNumber(body.id)
         o = mbs.GetObject(b)
         id = body.id
 
-        sensor_pos = mbs.AddSensor(
+        mbs.AddSensor(
             exu.utilities.SensorBody(
                 name = id + ".position",
                 bodyNumber = b,
@@ -435,7 +419,7 @@ def create_sensors(mbs, problem):
             )
         )
 
-        sensor_pos = mbs.AddSensor(
+        mbs.AddSensor(
             exu.utilities.SensorBody(
                 name = id + ".displacement",
                 bodyNumber = b,
@@ -445,7 +429,7 @@ def create_sensors(mbs, problem):
             )
         )
 
-        sensor_pos = mbs.AddSensor(
+        mbs.AddSensor(
             exu.utilities.SensorBody(
                 name = id + ".rotation",
                 bodyNumber = b,
@@ -455,7 +439,7 @@ def create_sensors(mbs, problem):
             )
         )
 
-        sensor_vel = mbs.AddSensor(
+        mbs.AddSensor(
             exu.utilities.SensorBody(
                 name = id + ".velocity",
                 bodyNumber = b,
@@ -465,7 +449,7 @@ def create_sensors(mbs, problem):
             )
         )
 
-        sensor_acc = mbs.AddSensor(
+        mbs.AddSensor(
             exu.utilities.SensorBody(
                 name = id + ".acceleration",
                 bodyNumber = b,
@@ -475,29 +459,19 @@ def create_sensors(mbs, problem):
             )
         )
 
-#        sensor_rotmat = mbs.AddSensor(
-#            exu.utilities.SensorBody(
-#                name = id + ".rotationMatrix",
-#                bodyNumber = b,
-#                outputVariableType = exu.OutputVariableType.RotationMatrix,
-#                storeInternal = True,
-#            )
-#        )
-
-#        sensor_f = mbs.AddSensor(
-#            exu.utilities.SensorBody(
-#                name = body["id"] + ".force",
-#                bodyNumber = b,
-#                localPosition = o["physicsCenterOfMass"],
-#                storeInternal = True,
-#                outputVariableType = exu.OutputVariableType.Force,
-#            )
-#        )
+        mbs.AddSensor(
+            exu.utilities.SensorBody(
+                name = id + ".rotationMatrix",
+                bodyNumber = b,
+                outputVariableType = exu.OutputVariableType.RotationMatrix,
+                storeInternal = True,
+            )
+        )
 
     for sling in problem.rigging.values():
         id = sling.id
         s = mbs.GetObjectNumber(id)
-        sensor_f = mbs.AddSensor(
+        mbs.AddSensor(
             exu.utilities.SensorObject(
                 name = id + ".force",
                 objectNumber=s,
@@ -509,8 +483,6 @@ def create_sensors(mbs, problem):
 
 def compute_residuals(mbs, bodies):
     """Compute residual equilibrium errors using the remaining inertia at the end of the simulation."""
-    max_force = 0.0
-    max_moment = 0.0
     max_velocity = 0.0
 
     for body in bodies:
@@ -519,42 +491,15 @@ def compute_residuals(mbs, bodies):
         o = mbs.GetObject(b)
         n = o["nodeNumber"]
 
-        # Fetch parameters
-        mass = o["physicsMass"]
-        Ixx, Iyy, Izz, Ixy, Iyz, Izx = o["physicsInertia"]
-
-        # Build the symmetric 3x3 matrix about the COM
-        inertia = np.array([
-            [Ixx, Ixy, Izx],
-            [Ixy, Iyy, Iyz],
-            [Izx, Iyz, Izz],
-        ])
-
         # Get the final kinematic state
-        acc = np.array(mbs.GetNodeOutput(n, exu.OutputVariableType.Acceleration))
         vel = np.array(mbs.GetNodeOutput(n, exu.OutputVariableType.Velocity))
-        ang_acc = np.array(mbs.GetNodeOutput(n, exu.OutputVariableType.AngularAcceleration))
-        ang_vel = np.array(mbs.GetNodeOutput(n, exu.OutputVariableType.AngularVelocity))
-
-        R = mbs.GetNodeOutput(n, exu.OutputVariableType.RotationMatrix)
-        R = np.array(R).reshape((3,3))
-
-        inertia_global = R @ inertia @ R.T
-
-        # Compute residual equilibrium errors
-        residual_force = mass * acc
-        residual_moment = (inertia_global @ ang_acc) + np.cross(ang_vel, inertia_global @ ang_vel)
 
         # Compute the scalar magnitudes
-        force_error = np.linalg.norm(residual_force)
-        moment_error = np.linalg.norm(residual_moment)
         velocity_error = np.linalg.norm(vel)
 
-        max_force = max(max_force, force_error)
-        max_moment = max(max_moment, moment_error)
         max_velocity = max(max_velocity, velocity_error)
 
-    return max_force, max_moment, max_velocity
+    return max_velocity
 
 
 def get_sensor_results(mbs, problem):
@@ -568,7 +513,7 @@ def get_sensor_results(mbs, problem):
         if sensor["sensorType"] == "Body" and sensor["outputVariableType"] == exu.OutputVariableType.Displacement:
             # What is the body offset - for updating .yaml file
             b = mbs.GetObject(sensor["bodyNumber"])
-            bdy = problem.objects[b["name"]]
+            bdy = problem.bodies[b["name"]]
             ref = bdy.position
             print(f"Sensor: {sensor["name"]}, position after simulation: {ref+mbs.GetSensorValues(sensor_number) * ureg("m")}")
 
@@ -587,31 +532,33 @@ def get_sensor_results(mbs, problem):
             tilt_x_pct = np.tan(tilt_x) * 100
             tilt_y_pct = np.tan(tilt_y) * 100
 
-            print(f"Body tilt i degrees: rx: {tilt_x_deg}, ry: {tilt_y_deg}")
-            print(f"Body tilt i %: rx: {tilt_x_pct}, ry: {tilt_y_pct}")
+            print(f"Body tilt in degrees: rx: {tilt_x_deg}, ry: {tilt_y_deg}")
+            print(f"Body tilt in %: rx: {tilt_x_pct}, ry: {tilt_y_pct}")
 
         if sensor["sensorType"] == "Object" and sensor["outputVariableType"] == exu.OutputVariableType.ForceLocal:
-            print(f"Sensor: {sensor["name"]}, converted to t and including DAF=1.2 and k_skl=1.1: {mbs.GetSensorValues(sensor_number)/9.81/1000*1.2*1.1}")
+            k_skl = 1.0
+            gamma_h = 1.3       # lifting factor
+            gamma_c = 1.3       # consequence factor
+            gamma_s = 1.0       # termination factor
+            gamma_b = 1.0       # bending factor
+            gamma_w = 1.0       # wear factor
+            gamma_m = 2.0       # material factor
+            gamma_r = max(gamma_s, gamma_b)
+            safety_factor = max(gamma_h * gamma_c * gamma_r * gamma_w * gamma_m, 2.3 * gamma_r * gamma_w)
+            DAF = 1.25
+            print(f"Sensor: {sensor["name"]}, converted to t and including DAF={DAF}, k_skl={k_skl}, SF={safety_factor}: {mbs.GetSensorValues(sensor_number)/9.81/1000 * DAF * k_skl * safety_factor}")
 
 
 def post_step_user_function(mbs, t):
-
     step = mbs.sys.get("step", 0) + 1
     mbs.sys["step"] = step
 
     # compute residual occasionally
     if step % STEP_INTERVAL == 0:
-        f_res, m_res, v_res = compute_residuals(mbs, prb.objects.values())
+        v_res = compute_residuals(mbs, prb.bodies.values())
         mbs.sys["v_res"] = v_res
-
-#        mbs.sys["f_res"] = f_res
     else:
-#        v_res = mbs.sys.get("v_res", 0.0)
-
-#        f_res = mbs.sys.get("f_res", 0.0)
         v_res = mbs.sys.get("v_res", 1e6)
-
-#        f_res = mbs.sys.get("f_res", 1e6)
 
     # adaptive damping
     if v_res > 0.5:
@@ -628,12 +575,8 @@ def post_step_user_function(mbs, t):
         coords_t *= (1 - factor)
         mbs.systemData.SetODE2Coordinates_t(coords_t)
 
-#    return True
-    equilibrium = v_res < 1e-2 #and f_res < 1e-3
-#    print(f"equilibrium: {equilibrium}, v_res: {v_res}, f_res: {f_res}, t: {t}")
-#    print(f"equilibrium: {equilibrium}, v_res: {v_res}, t: {t}")
+    equilibrium = v_res < 1e-2
     return not equilibrium
-#    return not (v_res < 1e-2 and f_res < 1e-3)
 
 
 def run_solver(mbs, simulation_duration, time_step):
@@ -701,8 +644,8 @@ def export_initial_state(mbs, problem):
     lines.append("  # - Bodies WITH a parent are relative to their parent")
     lines.append("")
 
-#    for obj in problem.get_all_bodies():
-    for obj in problem.objects.values():
+    objects = problem.bodies | problem.shackles
+    for obj in objects.values():
 
         # --- get solver state ---
         body_number = mbs.GetObjectNumber(obj.id)
@@ -713,14 +656,6 @@ def export_initial_state(mbs, problem):
 
             euler = rotation_matrix_to_euler(R_global)
 
-#            values = [
-#                f"{p_global[0]:.6g} m",
-#                f"{p_global[1]:.6g} m",
-#                f"{p_global[2]:.6g} m",
-#                f"{euler[0]:.6g} deg",
-#                f"{euler[1]:.6g} deg",
-#                f"{euler[2]:.6g} deg",
-#            ]
             values = [
                 f"{p_global[0]:.8g} m",
                 f"{p_global[1]:.8g} m",
@@ -838,11 +773,9 @@ def solve_with_auto_stop(mbs, SC, problem):
 
 #        mbs.systemData.SetTime(t)
 
-        f_res, m_res, v_res = compute_residuals(mbs, problem["bodies"])
+        v_res = compute_residuals(mbs, problem["bodies"])
 
         print(f"\nTime: {t:.2f} s")
-        print(f"  Force residual:  {f_res:.3e} N")
-        print(f"  Moment residual: {m_res:.3e} Nm")
         print(f"  Velocity:        {v_res:.3e} m/s")
 
         # convergence check
@@ -898,27 +831,6 @@ def plot_convergence(mbs, problem):
     plt.show()
 
 
-def compute_residual_history(mbs, problem):
-    times = []
-    res_f = []
-    res_m = []
-
-    sensor = mbs.GetSensorNumber("load.velocity")  # just to get time grid
-    data = mbs.GetSensorStoredData(sensor)
-
-    for row in data:
-        t = row[0]
-        mbs.systemData.SetTime(t)
-
-        f, m, _ = compute_residuals(mbs, problem["bodies"])
-
-        times.append(t)
-        res_f.append(f)
-        res_m.append(m)
-
-    return times, res_f, res_m
-
-
 def plot_residuals(times, res_f, res_m):
     import matplotlib.pyplot as plt
 
@@ -931,3 +843,178 @@ def plot_residuals(times, res_f, res_m):
     plt.grid()
 
     plt.show()
+
+def get_results(mbs, problem):
+    results = {
+        "bodies": {},
+        "slings": {},
+        "shackles": {},
+        "attachment_points": {},
+    }
+
+    # Collect sling results
+    for sling in problem.rigging.values():
+        results["slings"][sling.id] = get_sling_results(mbs, sling)
+
+    # Collect body results
+    for body in problem.bodies.values():
+        results["bodies"][body.id] = get_body_results(mbs, body)
+
+    # Combine forces and moments acting on attachment points
+    compute_loads_on_attachment_points(problem, results)
+
+    # Compute force and moment sums on bodies
+    compute_body_force_and_moment_sums(problem, results)
+
+    return results
+
+
+def get_sling_results(mbs, sling):
+    results = {}
+
+    s = mbs.GetObjectNumber(sling.id)
+    results["sling_tension"] = mbs.GetObjectOutput(
+        objectNumber = s,
+        variableType = exu.OutputVariableType.ForceLocal # * ureg("N"),
+    )
+
+    ba = mbs.GetObjectNumber(sling.end_a.parent.id)
+    end_a_global_position = get_global_position(mbs, ba, sling.end_a.position_local.to("m").magnitude)
+
+    bb = mbs.GetObjectNumber(sling.end_b.parent.id)
+    end_b_global_position = get_global_position(mbs, bb, sling.end_b.position_local.to("m").magnitude)
+
+    vector = end_b_global_position - end_a_global_position
+    unit_vector = vector / np.linalg.norm(vector)
+
+    # forces at end_a of sling - tension will be negative
+    results["sling_force_components"] = results["sling_tension"] * unit_vector
+
+    return results
+
+
+def get_body_results(mbs, body):
+    results = {}
+
+    b = mbs.GetObjectNumber(body.id)
+    o = mbs.GetObject(b)
+
+    # Position
+    results["position"] = mbs.GetObjectOutputBody(
+        objectNumber = b,
+        variableType = exu.OutputVariableType.Position,
+        localPosition = o["physicsCenterOfMass"],
+        configuration = exu.ConfigurationType.Current,
+    ) * ureg("m")
+
+    # Tilt x and y
+    rotation_matrix = mbs.GetObjectOutputBody(
+        objectNumber = b,
+        variableType = exu.OutputVariableType.RotationMatrix,
+        localPosition = o["physicsCenterOfMass"],
+        configuration = exu.ConfigurationType.Current,
+    )
+
+    R = np.array(rotation_matrix).reshape((3, 3))
+    results["tilt_x"] = np.degrees(np.arcsin(R[2,0])) * ureg("degrees")
+    results["tilt_y"] = np.degrees(np.arcsin(R[2,1])) * ureg("degrees")
+
+    return results
+
+
+def compute_loads_on_attachment_points(problem, results):
+    def add_sling_force_global(attachment_point, sling, results, fac):
+        sling_results = results["slings"][sling.id]
+        ap_id = attachment_point.id
+
+        ap = results["attachment_points"].get(ap_id)
+        if ap is None:
+            results["attachment_points"][ap_id] = {}
+            results["attachment_points"][ap_id]["force_global"] = np.array([0.0, 0.0, 0.0])
+            results["attachment_points"][ap_id]["moment_global"] = np.array([0.0, 0.0, 0.0])
+
+        results["attachment_points"][ap_id]["force_global"] += (sling_results["sling_force_components"] * fac)
+
+    def add_connection_force_global(attachment_point, force_global, moment_global, results, fac):
+        ap_id = attachment_point.id
+
+        ap = results["attachment_points"].get(ap_id)
+        if ap is None:
+            results["attachment_points"][ap_id] = {}
+            results["attachment_points"][ap_id]["force_global"] = np.array([0.0, 0.0, 0.0])
+            results["attachment_points"][ap_id]["moment_global"] = np.array([0.0, 0.0, 0.0])
+
+        results["attachment_points"][ap_id]["force_global"] += force_global * fac
+        results["attachment_points"][ap_id]["moment_global"] += moment_global * fac
+
+
+    # slings may be attached directly to bodies
+    for sling in problem.rigging.values():
+        add_sling_force_global(attachment_point=sling.end_a, sling=sling, results=results, fac=1)
+        add_sling_force_global(attachment_point=sling.end_b, sling=sling, results=results, fac=-1)
+
+    # connections connect bodies to bodies, and bodies to ground
+    for connection in problem.connections.values():
+        n = mbs.GetObjectNumber(connection.id)
+        o = mbs.GetObject(n)
+
+        force_local = mbs.GetObjectOutput(
+            objectNumber = n,
+            variableType = exu.OutputVariableType.ForceLocal, # * ureg("N"),
+            configuration = exu.ConfigurationType.Current,
+        )
+
+        moment_local = mbs.GetObjectOutput(
+            objectNumber = n,
+            variableType = exu.OutputVariableType.TorqueLocal, # * ureg("N"),
+            configuration = exu.ConfigurationType.Current,
+        )
+
+        m0 = mbs.GetMarker(o["markerNumbers"][0])
+        R0 = mbs.GetObjectOutputBody(
+            objectNumber = m0["bodyNumber"],
+            variableType = exu.OutputVariableType.RotationMatrix,
+            configuration = exu.ConfigurationType.Current,
+        )
+
+        force_global = R0.reshape(3,3) @ o["rotationMarker0"] @ force_local
+        moment_global = R0.reshape(3,3) @ o["rotationMarker0"] @ moment_local
+
+        # Documentation not crystal clear re sign convention for moments, however simple
+        # tests showed this was the only way to get both force and moment equilibrium
+        moment_global *= -1
+
+        add_connection_force_global(attachment_point=connection.ap1, force_global=force_global,
+                                    moment_global=moment_global, results=results, fac=1)
+
+        add_connection_force_global(attachment_point=connection.ap2, force_global=force_global,
+                                    moment_global=moment_global, results=results, fac=-1)
+
+
+def compute_body_force_and_moment_sums(problem, results):
+    for body in problem.bodies.values():
+        f_sum = body.mass.to("kg").magnitude * problem.g.to("m/s/s").magnitude
+        m_sum = 0.0
+
+        # Get local and global position of CoG
+        b = mbs.GetObjectNumber(body.id)
+        o = mbs.GetObject(b)
+        cog_local = o["physicsCenterOfMass"]
+        cog_global = get_global_position(mbs, b, cog_local)
+
+        for ap in body.attachment_points.values():
+            ap_res = results["attachment_points"].get(ap.id)
+            if ap_res:
+                ap_global_position = get_global_position(mbs, b, ap.position_local.to("m").magnitude)
+
+                f = results["attachment_points"][ap.id]["force_global"]
+                m = results["attachment_points"][ap.id]["moment_global"]
+                f_sum += f
+
+                r = ap_global_position - cog_global
+                m_sum += np.cross(r, f) + m
+
+        results["bodies"][body.id]["f_sum"] = f_sum
+        results["bodies"][body.id]["m_sum"] = m_sum
+        results["bodies"][body.id]["f_residual"] = np.linalg.norm(f_sum)
+        results["bodies"][body.id]["m_residual"] = np.linalg.norm(m_sum)
