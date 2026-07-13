@@ -1,7 +1,8 @@
 """Main entry module for setting up and solving a lift problem."""
 import logging
 
-from . import lift_problem, solver
+from . import lift_problem
+from . import exu_problem, exu_solver
 
 
 def setup_logging() -> None:
@@ -14,10 +15,26 @@ def setup_logging() -> None:
 
 def solve_problem(problem: str) -> None:
     """Set up and solve lifting problem."""
+
     # Parse the problem into a model. Problem is a yaml-formatted string.
     prb = lift_problem.LiftProblem().from_yaml(problem)
 
-    sol = solver.solve(problem=prb, simulation_duration=20, time_step=0.002)
+    # Create the problem in exudyn
+    exu_prb = exu_problem.ExuProblem(prb)
+
+    # For debug purposes
+    # exu_prb.mbs.Assemble()
+    # exu_prb.SC.renderer.Start()
+    # exu_prb.SC.renderer.DoIdleTasks()
+
+    # Solve and extract results
+    exu_slv = exu_solver.ExuSolver(exu_prb)
+    exu_slv.solve(simulation_duration=20, time_step=0.002)
+    results = exu_slv.get_results()
+
+    print(results.export_initial_state())
+
+    print(vars(results))
 
 
 if __name__ == "__main__":
