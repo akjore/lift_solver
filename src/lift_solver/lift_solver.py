@@ -2,6 +2,7 @@
 import logging
 
 from . import lift_problem
+from .code_check import CodeCheck
 from . import exu_problem, exu_solver
 
 
@@ -32,9 +33,17 @@ def solve_problem(problem: str) -> None:
     exu_slv.solve(simulation_duration=20, time_step=0.002)
     results = exu_slv.get_results()
 
+    # Code check
+    #       temp only: manually populating
+    code_check = CodeCheck(results, prb)
+    print(code_check.results())
+    print()
     print(results.export_initial_state())
 
-    print(vars(results))
+    print()
+#    print(results.to_render_model())
+
+#    print(vars(results))
 
 
 if __name__ == "__main__":

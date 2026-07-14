@@ -1,19 +1,20 @@
 """Class for holding simulation results."""
 from typing import Self
 
+import numpy as np
+import pint
 
 class Results:
 
-    def __init__(self: Self):
+    def __init__(self: Self) -> None:
         self.bodies = {}
         self.shackles = {}
         self.slings = {}
         self.attachment_points = {}
-        self.initial_state = None
         self.constraints = {}
 
 
-    def export_initial_state(self: Self):
+    def export_initial_state(self: Self) -> str:
         """
         Export solver state into YAML-ready initial_state block.
 
@@ -50,3 +51,50 @@ class Results:
             lines.append(f"  {id}: [{values_str}]")
 
         return "\n".join(lines)
+
+
+    def to_render_model(self: Self) -> dict:
+        return {
+            "bodies": [cnv_quantity(obj) for obj in self.bodies.values()],
+            "shackles": [cnv_quantity(obj) for obj in self.shackles.values()],
+            "slings": [cnv_quantity(obj) for obj in self.slings.values()]
+        }
+
+
+def cnv_quantity(value) -> dict:
+    if isinstance(value, dict):
+        return {
+            k: cnv_quantity(v)
+            for k, v in value.items()
+        }
+
+    if isinstance(value, (list, tuple)):
+        return [
+            cnv_quantity(v)
+            for v in value
+        ]
+
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+
+    if isinstance(value, pint.Quantity):
+        val = value
+        if val.check("[length]"):
+            val.ito("m")
+        elif value.check("[mass]"):
+            val.ito("kg")
+        elif value.check("[]"):
+            val.ito("rad")
+
+        mag = val.magnitude
+        unit = val.units
+        if isinstance(mag, np.ndarray):
+            mag = mag.tolist()
+
+        return {
+            "magnitude": mag,
+            "units": f"{unit:~P}",
+        }
+
+    return value
+

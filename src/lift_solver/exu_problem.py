@@ -92,7 +92,7 @@ class ExuProblem:
             self.attachment_points = self.attachment_points | attachment_points
 
         # Create slings between attachment points
-        for sl in problem.rigging.values():
+        for sl in problem.slings.values():
             if isinstance(sl, Sling):
                 self.slings[sl.id] = self.create_sling(sl, representative_mass)
 

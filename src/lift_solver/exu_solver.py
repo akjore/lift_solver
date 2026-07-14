@@ -169,7 +169,7 @@ class ExuSolver:
 
 
         # Collect sling results - this only works for slings as weight-less springs between 2 points
-        for sling in self.problem.rigging.values():
+        for sling in self.problem.slings.values():
             # Get sling results
             results.slings[sling.id] = self.get_sling_results(sling)
 
@@ -188,72 +188,6 @@ class ExuSolver:
             results.shackles[shackle.id] = self.get_shackle_results(shackle, results)
 
         return results
-
-
-#    def export_initial_state(self: Self):
-#        """
-#        Export solver state into YAML-ready initial_state block.
-
-#        Rules:
-#        - parent=None  → export absolute pose
-#        - parent!=None → export pose relative to parent
-#        """
-
-#        lines = []
-#        lines.append("initial_state:")
-#        lines.append("  # format: [x, y, z, roll, pitch, yaw]")
-#        lines.append("  #")
-##        lines.append("  # IMPORTANT:")
-#        lines.append("  # - Bodies WITHOUT a parent are absolute (global)")
-#        lines.append("  # - Bodies WITH a parent are relative to their parent")
-#        lines.append("")
-
-#        objects = self.problem.bodies | self.problem.shackles
-#        for obj in objects.values():
-
-#            # --- get solver state ---
-#            body_number = self.mbs.GetObjectNumber(obj.id)
-#            p_global, R_global = self.get_body_state(body_number)
-
-#            # --- ROOT: export absolute ---
-#            if obj.parent is None:
-#                euler = self.rotation_matrix_to_euler(R_global)
-
-#                values = [
-#                    f"{p_global[0]:.8g} m",
-#                    f"{p_global[1]:.8g} m",
-#                    f"{p_global[2]:.8g} m",
-#                    f"{euler[0]:.8g} deg",
-#                    f"{euler[1]:.8g} deg",
-#                    f"{euler[2]:.8g} deg",
-#                ]
-
-#            # --- CHILD: export relative ---
-#            else:
-#                parent = obj.parent
-
-#                parent_body_number = self.mbs.GetObjectNumber(parent.id)
-#                p_parent, R_parent = self.get_body_state(parent_body_number)
-
-#                # relative transform
-#                p_rel = R_parent.T @ (p_global - p_parent)
-#                R_rel = R_parent.T @ R_global
-
-#                euler = self.rotation_matrix_to_euler(R_rel)
-
-#                values = [
-#                    f"{p_rel[0]:.6g} m",
-#                    f"{p_rel[1]:.6g} m",
-#                    f"{p_rel[2]:.6g} m",
-#                    f"{euler[0]:.6g} deg",
-#                    f"{euler[1]:.6g} deg",
-#                    f"{euler[2]:.6g} deg",
-#                ]
-
-#            values_str = ", ".join(values)
-#            lines.append(f"  {obj.id}: [{values_str}]")
-
-#        return "\n".join(lines)
 
 
     def get_body_state(self: Self, body_number):
@@ -304,7 +238,7 @@ class ExuSolver:
         s = self.mbs.GetObjectNumber(sling.id)
         sling_tension = self.mbs.GetObjectOutput(
             objectNumber = s,
-            variableType = exu.OutputVariableType.ForceLocal # * ureg("N"),
+            variableType = exu.OutputVariableType.ForceLocal
         )
 
         ba = self.mbs.GetObjectNumber(sling.end_a.parent.id)
@@ -320,7 +254,8 @@ class ExuSolver:
         force_global = sling_tension * unit_vector
 
         return {
-            "sling_tension": sling_tension * ureg("N"),
+            "id": sling.id,
+            "tension": sling_tension * ureg("N"),
             "force_global": force_global * ureg("N"),
         }
 
@@ -371,6 +306,7 @@ class ExuSolver:
             euler_rel = self.rotation_matrix_to_euler(R_rel)
 
         return {
+            "id": body.id,
             "position": position * ureg("m"),
             "tilt_x": tilt_x * ureg("deg"),
             "tilt_y": tilt_y * ureg("deg"),
@@ -416,6 +352,7 @@ class ExuSolver:
         moment_global *= -1
 
         return {
+            "id": connection.id,
             "force_global": force_global * ureg("N"),
             "moment_global": moment_global * ureg("N*m"),
         }

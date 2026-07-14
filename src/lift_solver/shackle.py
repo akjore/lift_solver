@@ -359,6 +359,12 @@ class Shackle(RigidBodyBase):
         self._sub_type = value
 
 
+    @property
+    def mbl(self: Self) -> float:
+        """MBL."""
+        return self.wll * self.safety_factor
+
+
     def _stl_to_shackle_rotation(self: Self) -> np.array(3):
         # e.g. STL has pin along Z → rotate to X
         if self.sub_type == "":

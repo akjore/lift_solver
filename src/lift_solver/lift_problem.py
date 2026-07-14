@@ -48,7 +48,8 @@ class LiftProblem:
         self.shackles = {}              # Shackles
         self.attachment_points = {}     # All attachment points
         self.connections = {}           # Pin joints, etc.
-        self.rigging = {}               # All slings and grommets
+#        self.rigging = {}               # All slings and grommets
+        self.slings = {}                # Slings
 
         self.world = World()
 
@@ -104,6 +105,9 @@ class LiftProblem:
         if initial_state:
             self.apply_initial_state(initial_state)
 
+        # Set code check parameters (optional)
+        self.code_check_settings = problem.get("code_check")
+
 
     def add_body(self: Self, body: dict) -> None:
         """Add a body to the lift problem with the properties given by 'body'."""
@@ -158,7 +162,7 @@ class LiftProblem:
         sl.end_b = self.attachment_points[sl.end_b]
         sl.sheaves = [self.attachment_points[sheave] for sheave in sl.sheaves]
 
-        self.rigging[sl.id] = sl
+        self.slings[sl.id] = sl
 
 
     def add_constraint(self: Self, constraint: dict) -> None:
@@ -319,15 +323,7 @@ def cnv_quantity(value) -> dict:
         ]
 
     if isinstance(value, np.ndarray):
-#        return cnv_quantity(value.tolist())
-#        return {
-#            "magnitude": value.tolist(),
-#            "units": "",
-#        }
         return value.tolist()
-
-#    if isinstance(value, pint.Quantity) and isinstance(value.magnitude, np.ndarray):
-#        return cnv_quantity(value.tolist())
 
     if isinstance(value, pint.Quantity):
         val = value
@@ -342,29 +338,10 @@ def cnv_quantity(value) -> dict:
         unit = val.units
         if isinstance(mag, np.ndarray):
             mag = mag.tolist()
-        # Lengths → m
-#        if value.check("[length]"):
-#            return float(
-#                value.to("m").magnitude
-#            )
 
-        # Masses → kg
-#        if value.check("[mass]"):
-#            return float(
-#                value.to("kg").magnitude
-#            )
-
-        # Angles → rad
-#        if value.check("[]"):
-#            return float(
-#                value.to("rad").magnitude
-#            )
         return {
             "magnitude": mag,
             "units": f"{unit:~P}",
         }
-
-#        # Everything else
-#        return float(value.magnitude)
 
     return value
