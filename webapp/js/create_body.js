@@ -28,7 +28,7 @@ export async function createGenericBody(obj, group) {
     group.add(attachmentPoints);
 
     // set transformation of body and children
-    const m = matrix4From3x3(obj.rotation);
+    const m = matrix4From3x3(obj.rotation_matrix);
 
     group.position.set(...obj.position.magnitude);
     group.setRotationFromMatrix(m);

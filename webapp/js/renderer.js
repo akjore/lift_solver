@@ -185,7 +185,7 @@ export async function renderProblem(problem) {
     registerSceneTree(world.root);
 
     // Slings
-    for (const sling of problem.rigging) {
+    for (const sling of problem.slings) {
       const group = createSling(sling, world);
       world.slings.add(group);
 

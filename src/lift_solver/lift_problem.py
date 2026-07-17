@@ -15,19 +15,6 @@ from .sling import Sling
 
 logger = logging.getLogger(__name__)
 
-
-#QUANTITY_KEYS = {
-#    "position",
-#    "cog",
-#    "mass",
-#    "diameter",
-#    "length",
-#    "hole_diameter",
-#    "outer_diameter",
-#    "thickness",
-#    "size",
-#}
-
 NON_QUANTITY_KEYS = {
     "id",
     "type",
@@ -48,7 +35,6 @@ class LiftProblem:
         self.shackles = {}              # Shackles
         self.attachment_points = {}     # All attachment points
         self.connections = {}           # Pin joints, etc.
-#        self.rigging = {}               # All slings and grommets
         self.slings = {}                # Slings
 
         self.world = World()
@@ -300,7 +286,7 @@ class LiftProblem:
         return {
             "bodies": [self._render_dict(obj) for obj in self.bodies.values()],
             "shackles": [self._render_dict(obj) for obj in self.shackles.values()],
-            "rigging": [self._render_dict(obj) for obj in self.rigging.values()]
+            "slings": [self._render_dict(obj) for obj in self.slings.values()]
         }
 
     def _render_dict(self, obj):
@@ -329,8 +315,8 @@ def cnv_quantity(value) -> dict:
         val = value
         if val.check("[length]"):
             val.ito("m")
-        elif value.check("[mass]"):
-            val.ito("kg")
+#        elif value.check("[mass]"):
+#            val.ito("kg")
         elif value.check("[]"):
             val.ito("rad")
 

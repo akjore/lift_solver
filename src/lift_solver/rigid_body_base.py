@@ -49,29 +49,28 @@ class RigidBodyBase:
             return self.position
         return self.parent.global_position() + self.parent.global_rotation() @ self.position
 
+
     # -------------------------------
-    # Set pose
+    # Pose
     # -------------------------------
     def set_pose(self: Self, position: np.array(3), orientation: np.array(3)) -> None:
         """Set body pose (position and orientation)."""
         self.position = position
         self.rotation = self._euler_to_matrix(orientation)
 
+
     def translate(self: Self, vec: np.array(3)) -> None:
         """Set body position."""
         self.position += vec
+
 
     def rotate(self: Self, R_new: np.array(3)) -> None:
         """Set body orientation."""
         self.rotation = R_new @ self.rotation
 
 
-
     def set_global_pose(self, position, rotation):
-        """
-        Set pose in global coordinates.
-        """
-
+        """Set pose in global coordinates."""
         if self.parent is None:
             self.position = position
             self.rotation = rotation
@@ -92,9 +91,7 @@ class RigidBodyBase:
 
 
     def relative_to(self, parent):
-        """
-        Return transform of self relative to given parent.
-        """
+        """Return transform of self relative to given parent."""
 
         R_self = self.global_rotation()
         p_self = self.global_position()
@@ -108,6 +105,9 @@ class RigidBodyBase:
         return p_rel, R_rel
 
 
+    # -------------------------------
+    # Utilities
+    # -------------------------------
     def _euler_to_matrix(self: Self, euler: list) -> list:
         # Euler convention: ZYX (Rz @ Ry @ Rx)
         rx, ry, rz = euler.to("radians")
@@ -137,18 +137,59 @@ class RigidBodyBase:
         return Rz @ Ry @ Rx
 
 
+    def _matrix_to_euler(self, R):
+        """
+        Inverse of _euler_to_matrix().
+
+        Returns:
+            [rx, ry, rz] as pint angles.
+        """
+
+        ry = np.arcsin(-R[2, 0])
+
+        cy = np.cos(ry)
+
+        if abs(cy) > 1e-8:
+            rx = np.arctan2(
+                R[2, 1],
+                R[2, 2]
+            )
+
+            rz = np.arctan2(
+                R[1, 0],
+                R[0, 0]
+            )
+
+        else:
+            # Gimbal lock
+
+            rx = 0.0
+
+            rz = np.arctan2(
+                -R[0, 1],
+                 R[1, 1]
+            )
+
+        return (np.array([
+            rx,
+            ry,
+            rz
+        ]) * ureg.radian).to("deg")
+
+
+    # -------------------------------
+    # Export
+    # -------------------------------
     def to_dict(self):
         """Create a dict representation of the class."""
         return {
             "id": self.id,
             "type": self.__class__.__name__,
-#            "position": self.global_position().tolist(),
-#            "rotation": self.global_rotation().tolist(),
-#            "cog": self.cog.tolist(),
             "position": self.global_position(),
-            "rotation": self.global_rotation(),
+            "rotation_matrix": self.global_rotation(),
+            "rotation_euler": self._matrix_to_euler(self.global_rotation()),
             "cog": self.cog,
-            "mass": self.mass,
+            "mass": self.mass.to("t"),
             "children": [c.id for c in self.children],
             "attachment_points": [a.to_dict() for a in self.attachment_points.values()],
             "visual": self.visual.to_dict() if isinstance(self.visual, Visual) else self.visual,

@@ -89,7 +89,6 @@ class Shackle(RigidBodyBase):
 
         self.pose = None
         self.pin_connection = None
-#        self.rotation_about_pin = Q_("0 deg")
 
         self.pin = AttachmentPoint(
             id = self.id + ".pin",
@@ -423,12 +422,17 @@ class Shackle(RigidBodyBase):
     def to_dict(self: Self) -> dict:
         """Set body values based on values proviced in dict."""
         ret = super().to_dict()
-        ret["model"] = self.model
-        ret["wll"] = self.wll
-        ret["mass"] = self.mass
-        ret["safety_factor"] = self.safety_factor
 
-        return ret
+        return ret | {
+            "model": self.model,
+            "manufacturer": self.manufacturer,
+            "wll": self.wll.to("t"),
+            "pin_diameter": self.pin_diameter,
+            "bow_diameter": self.bow_diameter,
+            "inside_length": self.inside_length,
+            "sub_type": self.sub_type,
+            "safety_factor": self.safety_factor,
+        }
 
 
 class BaseAdapter:

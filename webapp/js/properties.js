@@ -20,23 +20,34 @@ export function updatePropertiesPanel(object) {
                 Id: data.id,
                 Mass: formatValue(data.mass),
                 CoG: formatValue(data.cog),
-                Position: formatValue(data.position)
+                Position: formatValue(data.position),
+                Orientation: formatValue(data.rotation_euler),
             };
             break;
         case "shackle":
             properties = {
                 Id: data.id,
                 Model: data.model,
+                Manufacturer: data.manufacturer,
                 WLL: formatValue(data.wll),
-                Mass: formatValue(data.mass),
                 "Safety factor": data.safety_factor,
+                Mass: formatValue(data.mass),
+                "Pin diameter": formatValue(data.pin_diameter),
+                "Bow diameter": formatValue(data.bow_diameter),
+                "Inside length": formatValue(data.inside_length),
+                Type: data.sub_type
             };
             break;
         case "sling":
             properties = {
                 Id: data.id,
                 Rope: data.rope_kind,
-                Diameter: formatValue(data.diameter)
+                Diameter: formatValue(data.diameter),
+                EA: formatValue(data.ea),
+                k: formatValue(data.k),
+                "Ultimate length": formatValue(data.ultimate_lenght),
+                Mass: formatValue(data.mass),
+                MBL: formatValue(data.mbl)
             };
             break;
         case "attachmentPoint":

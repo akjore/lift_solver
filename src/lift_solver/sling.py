@@ -26,16 +26,16 @@ class Rope:
     """Parent class for slings and grommets."""
 
     # Cable laid slings - single leg - diameter and WLL from NS-EN 13414-3:2003+A1:2008, Annex G.6
-    _CABLE_DIAMETER_MM = np.array([24, 27, 30, 33, 36, 39, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96, 102, 108, 114, 120,
-                                   126,132, 144, 150, 156, 162, 168, 174, 180, 192, 204, 216, 228, 240, 252, 264, 276,
-                                   288, 300,312, 336, 360, 384, 408, 432, 456, 480, 504, 528, 552, 576, 600, 624, 648,
-                                   672, 696]) * ureg.millimeter
-    _CABLE_WLL_t = np.array([3.35, 4.25, 5.5, 7, 8, 9.5, 11, 14.5, 18, 22.5, 28, 34, 41, 49, 58, 68, 79, 92, 106, 122,
-                             139, 158, 204, 230, 250, 270, 290, 315, 335, 410, 460, 510, 555, 610, 665, 720, 780, 840,
-                             900, 970, 1100, 1250, 1400, 1550, 1700, 1880, 2050, 2250, 2450, 2600, 2800, 3000, 3200,
-                             3400, 3650, 3850]) * ureg.ton
-    _SF = 6.33 - 0.022 * _CABLE_DIAMETER_MM.to("mm").magnitude
-    _CABLE_MBL_t = _CABLE_WLL_t * _SF
+#    _CABLE_DIAMETER_MM = np.array([24, 27, 30, 33, 36, 39, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96, 102, 108, 114, 120,
+#                                   126,132, 144, 150, 156, 162, 168, 174, 180, 192, 204, 216, 228, 240, 252, 264, 276,
+#                                   288, 300,312, 336, 360, 384, 408, 432, 456, 480, 504, 528, 552, 576, 600, 624, 648,
+#                                   672, 696]) * ureg.millimeter
+#    _CABLE_WLL_t = np.array([3.35, 4.25, 5.5, 7, 8, 9.5, 11, 14.5, 18, 22.5, 28, 34, 41, 49, 58, 68, 79, 92, 106, 122,
+#                             139, 158, 204, 230, 250, 270, 290, 315, 335, 410, 460, 510, 555, 610, 665, 720, 780, 840,
+#                             900, 970, 1100, 1250, 1400, 1550, 1700, 1880, 2050, 2250, 2450, 2600, 2800, 3000, 3200,
+#                             3400, 3650, 3850]) * ureg.ton
+#    _SF = 6.33 - 0.022 * _CABLE_DIAMETER_MM.to("mm").magnitude
+#    _CABLE_MBL_t = _CABLE_WLL_t * _SF
 
 
     def __init__(self: Self, id: str) -> None:
@@ -44,52 +44,108 @@ class Rope:
         self.d = 0 * ureg.millimeter
         self.ea = 0 * ureg.newton
         self.rope_kind = None
+        self.g = 9.81 * ureg("m/s/s")
+        self.default_rope_tensile_strength = 2160 * ureg("N/mm/mm")
 
 
     def _estimate_mbl(self: Self, kind: RopeKinds, diameter: float) -> float:
+        """Estimate the mbl (mass units) based on the diameter. Ref. ISO 19901-6:2009, Sec. 18.4.2.
+        It is assumed that HMPE has the same strength as steel wire rope with the same diameter.
+        """
         mbl = None
-        if kind == RopeKinds.IWRC and diameter:
-            mbl = 0.064 * diameter**2 * 1e6
+        if kind in [RopeKinds.IWRC, RopeKinds.HMPE] and diameter:
+            if diameter <= 60 * ureg("mm"):
+                mbl = (self.default_rope_tensile_strength * 0.346 * diameter**2) / self.g
+            else:
+                mbl = (8.55 * ureg("kN/mm") * diameter + 0.592 * ureg("kN/mm/mm") * diameter**2 - \
+                      0.000615 * ureg("kN/mm/mm/mm") * diameter**3) / self.g
         elif kind == RopeKinds.CABLE and diameter:
-            mbl = np.interp(diameter, self._CABLE_DIAMETER_MM, self._CABLE_MBL_t)
-        elif kind == RopeKinds.HMPE and diameter:
-            mbl = 0.064 * diameter**2 * 1e6
-        return mbl
+            # For simplicity, assume cable made up of core + 6 ropes, all with equal diameter
+            mbl = 0.85 * (6+1) * self._estimate_mbl(kind, diameter/3)
+        return mbl.to_compact()
 
 
     def _estimate_diameter(self: Self, kind: RopeKinds, mbl: float) -> float:
+        """Estimate diameter from the mbl (mass-units). See _estimate_mbl for reference material."""
         diameter = None
         if kind in (RopeKinds.IWRC, RopeKinds.HMPE) and mbl:
-            diameter = (mbl / 0.064) ** 0.5 / 1000
+            diameter = (mbl * self.g / self.default_rope_tensile_strength / 0.346)**0.5
+
+            if diameter > 60 * ureg("mm") and mbl <= 8846*ureg("t"):
+                # Note that the polynomial from ISO 19901-6 peaks at approx d=649mm, i.e. if MBL exceeds
+                # 86783kN = approx. 8846t, return 649mm. Otherwise, find roots; between 61mm and 649mm,
+                # the polynomial has 3 real roots - return the smallest positive root
+                # Ref. https://en.wikipedia.org/wiki/Cubic_equation, sections on depressed cubic and 3 real roots
+                # ax^3+bx^2+cx+d=0
+                a = -0.000615 * ureg("kN/mm/mm/mm")
+                b = 0.592 * ureg("kN/mm/mm")
+                c = 8.55 * ureg("kN/mm")
+                d = -mbl * self.g
+
+                # shift to depressed cubic equation, t^3+pt+q=0, where x = t - b/(3a)
+                p = (3*a*c-b**2)/(3*a**2)
+                q = (2*b**3 - 9*a*b*c + 27*a**2*d) / (27*a**3)
+
+                t_0 = 2*(-p/3)**0.5 * math.cos(1/3*math.acos(3*q/2/p*(-3/p)**0.5) - 0*2*math.pi/3)
+                t_1 = 2*(-p/3)**0.5 * math.cos(1/3*math.acos(3*q/2/p*(-3/p)**0.5) - 1*2*math.pi/3)
+                t_2 = 2*(-p/3)**0.5 * math.cos(1/3*math.acos(3*q/2/p*(-3/p)**0.5) - 2*2*math.pi/3)
+
+                # shift roots back
+                x_0 = t_0 - b/(3*a)
+                x_1 = t_1 - b/(3*a)
+                x_2 = t_2 - b/(3*a)
+
+                diameter = min([d for d in [x_0, x_1, x_2] if d>0])
+            elif mbl > 8846*ureg("t"):
+                diameter = 649 * ureg("mm")
+
         elif kind == RopeKinds.CABLE and mbl:
-            diameter = np.interp(mbl, self._CABLE_MBL_t, self._CABLE_DIAMETER_MM)
+            # Assume make-up is core + 6 identical slings
+            mbl_single_rope = mbl / 0.85 / (6+1)
+            diameter = 3 * self._estimate_diameter(RopeKinds.IWRC, mbl_single_rope)
+
         return diameter
 
 
     def _estimate_area(self: Self, kind: RopeKinds, diameter: float) -> float:
         area = None
-        if diameter and kind in (RopeKinds.IWRC, RopeKinds.CABLE, RopeKinds.HMPE):
-            area = 0.68 * math.pi / 4 * diameter**2
+        if diameter and kind in (RopeKinds.IWRC, RopeKinds.CABLE):
+            # Ref. https://www.vornbaeumen.de/knowhow/calculation-variables/?lang=en, 6x19 IWRC
+            area = 0.449 * diameter**2
+        elif diameter and kind in [RopeKinds.HMPE]:
+            # Assume 12x12 makeup. Ref. https://bexco-cms.lwprod.nl/uploads/1548936358_HL_SUPERIOR_SK78.pdf
+            d_strand = diameter / 4
+            d_substrand = d_strand / 4
+            area = (math.pi / 4 * d_substrand**2 * 12) * 12
         return area
 
 
     def _estimate_ea(self: Self, kind: RopeKinds, area: float, mbl: float) -> float:
         ea = None
         if kind == RopeKinds.IWRC and area:
-            ea = 128e6 * area
+            # Ref. https://www.orcina.com/webhelp/OrcaFlex/Content/html/Ropewire,Axialandbendingstiffness.htm
+            ea = 1.13E8 * ureg("kN/m/m") * area
         elif kind == RopeKinds.CABLE and area:
-            ea = 0.6 * 128e6 * area
+            ea = 1.13E8 * ureg("kN/m/m") * area
         elif kind == RopeKinds.HMPE and mbl:
-            ea = 30 * 9.81 * ureg("m/s/s") * mbl.to("t")
+            # Ref. Amsteel Blue tech info
+            # Elongation of 0.7% at 20%MBL, 0.96% at 30%MBL
+            # k = EA / L -> EA = kL = F/dx * L = F / (dx/L)
+            # EA_20%MBL = 0.2MBL/0.007 = 28.6MBL
+            # EA_30%MBL = 0.3MBL/0.0096 = 31.25MBL
+            # EA = 30MBL seems to give a reasonable value for typical load range
+            ea = 30 * mbl * self.g
         return ea
 
 
-    def _estimate_mass_per_length(self: Self, kind: RopeKinds, area: float, diameter: float) -> float:
+    def _estimate_mass_per_length(self: Self, kind: RopeKinds, area: float) -> float:
         mass_per_length = None
         if kind in (RopeKinds.IWRC, RopeKinds.CABLE) and area:
-            mass_per_length = 7.850 * area
-        elif kind == RopeKinds.HMPE and diameter:
-            mass_per_length = 0.000419 * diameter**2
+            mass_per_length = 7.850 * ureg("t/m/m/m") * area
+        elif kind == RopeKinds.HMPE and area:
+            # Build a rope from 12x12 substrands and strands, and tune density until linear weight
+            # approximately matches the table in https://bexco-cms.lwprod.nl/uploads/1548936358_HL_SUPERIOR_SK78.pdf
+            mass_per_length = 1.165 * ureg("t/m/m/m") * area
         return mass_per_length
 
 
@@ -196,7 +252,7 @@ class Sling(Rope):
         if mass:
             self.mass_per_length = mass / self.rope_length()
         if not (mass_per_length or mass):
-            self.mass_per_length = self._estimate_mass_per_length(self.kind, self.area, self.diameter)
+            self.mass_per_length = self._estimate_mass_per_length(self.kind, self.area)
 
 
     @property
@@ -284,7 +340,7 @@ class Sling(Rope):
         Equal to ultimate length of sling, plus length where
         sling is doubled (eyes and splice).
         """
-        return (self.ultimate_length + self.length_eye_a + self.length_eye_b + self.length_splice_a +
+        return (self.l_ultimate + self.length_eye_a + self.length_eye_b + self.length_splice_a +
                 self.length_splice_b)
 
 
@@ -358,19 +414,41 @@ class Sling(Rope):
 
     def to_dict(self: Self) -> dict:
         ret = super().to_dict()
-        ret["rope_kind"] = self.kind.name
-        ret["end_a"] = self.end_a.to_dict()
-        ret["end_b"] = self.end_b.to_dict()
-        ret["sheaves"] = [s.to_dict() for s in self.sheaves]
-        ret["eye_a"] = {
-            "length_splice": self.length_splice_a,
-            "separation_angle": self.eye_a_separation_angle,
-            "apex_offset": self.eye_a_apex_offset,
-        }
-        ret["eye_b"] = {
-            "length_splice": self.length_splice_b,
-            "separation_angle": self.eye_b_separation_angle,
-            "apex_offset": self.eye_b_apex_offset,
-        }
 
-        return ret
+        return ret | {
+            "rope_kind": self.kind.name,
+            "end_a": self.end_a.to_dict(),
+            "end_b": self.end_b.to_dict(),
+            "sheaves": [s.to_dict() for s in self.sheaves],
+            "ea": self.ea.to("kN"),
+            "k": self.k.to("kN/m"),
+            "ultimate_length": self.l_ultimate,
+            "mass": self.mass.to("t"),
+            "mbl": self.mbl.to("t"),
+            "eye_a": {
+                "length_splice": self.length_splice_a,
+                "separation_angle": self.eye_a_separation_angle,
+                "apex_offset": self.eye_a_apex_offset,
+            },
+            "eye_b": {
+                "length_splice": self.length_splice_b,
+                "separation_angle": self.eye_b_separation_angle,
+                "apex_offset": self.eye_b_apex_offset,
+            },
+        }
+#        ret["rope_kind"] = self.kind.name
+#        ret["end_a"] = self.end_a.to_dict()
+#        ret["end_b"] = self.end_b.to_dict()
+#        ret["sheaves"] = [s.to_dict() for s in self.sheaves]
+#        ret["eye_a"] = {
+#            "length_splice": self.length_splice_a,
+#            "separation_angle": self.eye_a_separation_angle,
+#            "apex_offset": self.eye_a_apex_offset,
+#        }
+#        ret["eye_b"] = {
+#            "length_splice": self.length_splice_b,
+#            "separation_angle": self.eye_b_separation_angle,
+#            "apex_offset": self.eye_b_apex_offset,
+#        }
+
+#        return ret

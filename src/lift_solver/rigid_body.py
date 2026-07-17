@@ -16,6 +16,7 @@ class RigidBody(RigidBodyBase):
         self.offset = np.array([0, 0, 0]) * ureg.meter
         self.size = np.array([0, 0, 0]) * ureg.meter
 
+
     def from_dict(self: Self, **kwargs) -> None:
         """Set body values based on values proviced in dict."""
         self.mass = kwargs.get("mass")

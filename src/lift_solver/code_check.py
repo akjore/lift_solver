@@ -10,6 +10,7 @@ from .results import Results
 from .sling import Sling, RopeKinds
 from .shackle import Shackle
 from .lift_problem import LiftProblem
+from . import ureg
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class CodeCheck():
         "k_skl": 1.0,
         "gamma_h": 1.3,
         "gamma_c": 1.3,
-        "daf": 1.3,
+        "daf": None,
         "gamma_w": 1.0,
         "weight_contingency": 1.0,
         "cog_contingency": 1.0,
@@ -59,16 +60,42 @@ class CodeCheck():
         self.simulation_results = simulation_results
         self.g = np.linalg.norm(problem.g)
 
-        self.code_check_results = {}
+        self.code_check_results = {
+            "slings": {},
+            "shackles": {},
+        }
+
+        # Calculate static hook-load - needed for default DAF
+        shl = sum([body.mass for body in problem.bodies.values()])
+        shl += sum([sling.mass for sling in problem.slings.values()])
+        shl += sum([shackle.mass for shackle in problem.shackles.values()])
+        self.DEFAULTS["daf"] = self.default_daf(shl)
+
+
+    def default_daf(self: Self, shl: pint.Quantity) -> float:
+        daf = None
+
+        if shl <= 100 * ureg("t"):
+            daf = 1 + 0.25 * (100 / shl)**0.5
+        elif shl <= 300 * ureg("t"):
+            daf = 1.25
+        elif shl <= 1000 * ureg("t"):
+            daf = 1.20
+        elif shl <= 2500 * ureg("t"):
+            daf = 1.15
+        else:
+            daf = 1.1
+
+        return daf
 
 
 
     def results(self: Self) -> dict:
         for id, sling in self.simulation_results.slings.items():
-            self.code_check_results[id] = self.check_sling(sling, self.problem.slings[id])
+            self.code_check_results["slings"][id] = self.check_sling(sling, self.problem.slings[id])
 
         for id, shackle in self.simulation_results.shackles.items():
-            self.code_check_results[id] = self.check_shackle(shackle, self.problem.shackles[id])
+            self.code_check_results["shackles"][id] = self.check_shackle(shackle, self.problem.shackles[id])
 
         return self.code_check_results
 
@@ -101,18 +128,21 @@ class CodeCheck():
         gamma_sf_2 = 2.3 * gamma_r * settings["gamma_w"]
         gamma_sf = max(gamma_sf_1, gamma_sf_2)
 
+        utilisation = (f_sd * gamma_sf / sling.mbl).to_base_units()
+
         return {
             "id": sling.id,
-            "f_sd": f_sd,
+            "sling_design_load": f_sd.to_base_units(),
             "daf": settings["daf"],
             "k_skl": settings["k_skl"],
             "weight_contingency": settings["weight_contingency"],
-            "cog_contingecy": settings["cog_contingency"],
+            "cog_contingency": settings["cog_contingency"],
             "gamma_b": gamma_b,
             "gamma_s": settings["gamma_s"],
             "gamma_r": gamma_r,
             "gamma_sf": gamma_sf,
-            "utilisation": f_sd * gamma_sf / sling.mbl,
+            "utilisation": utilisation,
+            "pass": bool(utilisation <= 1.0),
         }
 
 
@@ -136,12 +166,16 @@ class CodeCheck():
         ur_dynamic_1 = f_dynamic / (shackle.mbl / 3)
         #ur_dynamic_2 = f_dynamic / shackle.proof_load
 
+        utilisation = max(ur_static, ur_dynamic_1).to_base_units()
+
         return {
             "id": shackle.id,
             "f_static": f_static.to_base_units(),
             "f_dynamic": f_dynamic.to_base_units(),
-#            "ur": max(ur_static, ur_dynamic_1, ur_dynamic_2),
-            "ur": max(ur_static, ur_dynamic_1).to_base_units(),
+#            "utilisation": max(ur_static, ur_dynamic_1, ur_dynamic_2),
+            "daf": settings["daf"],
+            "utilisation": utilisation,
+            "pass": bool(utilisation <= 1.0),
         }
 
 
