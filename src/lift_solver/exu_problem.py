@@ -1,29 +1,20 @@
+"""Module for exudy problem definition."""
 import logging
 from typing import Self
 
-import numpy as np
-
 import exudyn as exu
+import numpy as np
 from exudyn import graphics
 
-from .shackle import Shackle
+from .attachment_point import AttachmentPoint
+from .constraint import Constraint, PinConstraint, World
+from .lift_problem import LiftProblem
 from .rigid_body import RigidBody
 from .sling import Sling
-from .attachment_point import AttachmentPoint
-from .constraint import World, PinConstraint
 from .visual_geometry import BoxVisual, CylinderVisual, MeshVisual
-from .lift_problem import LiftProblem
 
-from . import ureg
-# Exudyn units: SI
-# Forces in N
-# Mass in kg
-# Lengths in m
-
-prb = None
 logger = logging.getLogger(__name__)
-STEP_INTERVAL = 10
-LOG_INTERVAL = 50
+
 
 class ExuProblem:
     """Class to set up an exudyn version of a single LiftProblem."""
@@ -33,7 +24,8 @@ class ExuProblem:
     # Mass in kg
     # Lengths in m
 
-    def __init__(self: Self, problem: LiftProblem):
+    def __init__(self: Self, problem: LiftProblem) -> None:
+        """Initialize and set up an exudyn representation of the lift problem."""
         self.problem = problem
 
        # Set up mbs
@@ -59,19 +51,19 @@ class ExuProblem:
         self.create_damping(problem)
 
 
-    def create_ground(self: Self):
+    def create_ground(self: Self) -> exu.ObjectIndex:
+        """Create exudyn ground, world fixed reference system."""
         g_ground = graphics.CheckerBoard(point=[0,0,0], normal = [0,0,1], size=60, nTiles=12)
-        ground = self.mbs.AddObject(
+        return self.mbs.AddObject(
             exu.utilities.ObjectGround(
                 visualization=exu.utilities.VObjectGround(
                     graphicsData=[g_ground]
                 )
             )
         )
-        return ground
 
 
-    def setup_from_problem(self, problem):
+    def setup_from_problem(self, problem: LiftProblem) -> None:
         """Set up problem - convert quantities to SI units."""
         # Set up environment
         self.g = problem.g.to("m/s/s").magnitude
@@ -101,7 +93,8 @@ class ExuProblem:
             self.constraints[constraint.id] = self.create_constraint(constraint)
 
 
-    def create_body(self: Self, body: RigidBody):
+    def create_body(self: Self, body: RigidBody) -> exu.BodyIndex:
+        """Create an exudyn body from body."""
         mass = body.mass.to("kg").magnitude
         cog = body.cog.to("m").magnitude
 
@@ -145,7 +138,8 @@ class ExuProblem:
         return body, attachment_points
 
 
-    def create_attachment_point(self: Self, body_number: int, attachment_point: AttachmentPoint):
+    def create_attachment_point(self: Self, body_number: int, attachment_point: AttachmentPoint) -> exu.MarkerIndex:
+        """Create an exudyn marker based on attachment_point."""
         return self.mbs.AddMarker(
             exu.utilities.MarkerBodyRigid(
                 name = attachment_point.id,
@@ -156,7 +150,8 @@ class ExuProblem:
         )
 
 
-    def create_sling(self: Self, sling, representative_mass):
+    def create_sling(self: Self, sling: Sling, representative_mass: float) -> exu.ObjectIndex:
+        """Create an exudyn sling from sling."""
         ea = sling.ea.to("N").magnitude
         d = sling.diameter.to("m").magnitude
         l_ultimate = sling.l_ultimate.to("m").magnitude
@@ -200,7 +195,8 @@ class ExuProblem:
         return sling
 
 
-    def create_graphics(self: Self, cog: np.array, visual: dict):
+    def create_graphics(self: Self, cog: np.array, visual: dict) -> exu.graphics:
+        """Create exudyn graphics from visual."""
         gr = None
         if isinstance(visual, BoxVisual):
             gr = graphics.Brick(
@@ -244,9 +240,8 @@ class ExuProblem:
         return gr
 
 
-    def compute_rope_damping(self: Self, EA, L0, mass, safety_factor=0.8):
-        """
-        Compute near-critical damping factor for ReevingSystemSprings.
+    def compute_rope_damping(self: Self, ea: float, L0: float, mass: float, safety_factor: float=0.8) -> float:
+        """Compute near-critical damping factor for ReevingSystemSprings.
 
         Returns damping_rope_fac such that:
             dampingPerLength = fac * EA
@@ -256,23 +251,25 @@ class ExuProblem:
             =1 → critical
             >1 → overdamped (slower but stable)
         """
-        c_crit = 2 * np.sqrt(EA/L0 * mass)   # Ns/m
+        c_crit = 2 * np.sqrt(ea/L0 * mass)   # Ns/m
 
         # derive factor relative to EA:
-        damping_rope_fac = safety_factor * (c_crit / (EA/L0))
+        damping_rope_fac = safety_factor * (c_crit / (ea/L0))
 
         return damping_rope_fac
 
 
-    def create_constraint(self: Self, constraint):
+    def create_constraint(self: Self, constraint: Constraint) -> exu.ObjectIndex:
+        """Create an exudyn constraint from constraint."""
         if isinstance(constraint, PinConstraint):
             return self.create_pin_constraint(constraint)
         else:
             return self.create_generic_constraint(constraint)
 
 
-    def create_pin_constraint(self: Self, constraint):
-        def get_body(ap):
+    def create_pin_constraint(self: Self, constraint: PinConstraint) -> exu.ObjectIndex:
+        """Create an exudyn pin constraint from constraint."""
+        def get_body(ap: AttachmentPoint) -> exu.ObjectIndex:
             if isinstance(ap, World):
                 return self.ground
             return self.mbs.GetObjectNumber(ap.parent.id)
@@ -326,8 +323,9 @@ class ExuProblem:
         )
 
 
-    def create_generic_constraint(self: Self, constraint):
-        def create_marker(ground: int, parent: str, ap: AttachmentPoint):
+    def create_generic_constraint(self: Self, constraint: Constraint) -> exu.ObjectIndex:
+        """Greate an exudyn constraint from constraint."""
+        def create_marker(ground: int, parent: str, ap: AttachmentPoint) -> exu.Marker:
             return self.mbs.AddMarker(
                 exu.utilities.MarkerBodyRigid(
                     name = parent + "." + ap.id,
@@ -343,7 +341,7 @@ class ExuProblem:
         marker_numbers = []
         this_marker = [ap1, ap2]
         other_marker = [ap2, ap1]
-        for this_ap, other_ap in zip(this_marker, other_marker):
+        for this_ap, other_ap in zip(this_marker, other_marker, strict=True):
             if isinstance(this_ap, World):
                 m = create_marker(self.ground, ap1.id, other_ap)
             else:
@@ -365,9 +363,8 @@ class ExuProblem:
         )
 
 
-    def create_damping(self: Self, problem):
+    def create_damping(self: Self, problem: LiftProblem) -> None:
         """Add damping to quell body movements."""
-
         # For each body, add a damper between body and ground
         obj = problem.bodies | problem.shackles
         for body in obj.values():
@@ -380,20 +377,20 @@ class ExuProblem:
             cog_global = self.get_global_position(b, cog_local)
 
             # Create a damper
+            stiffness = 0
             self.mbs.CreateSpringDamper(
                 bodyNumbers = [self.ground, b],
                 localPosition0 = cog_global,
                 localPosition1 = cog_local,
-                stiffness = 0.,
+                stiffness = stiffness,
                 damping = 5e4,
                 show = True,
                 drawSize = 0.5,
             )
 
 
-    def get_global_position(self: Self, body, local_position):
+    def get_global_position(self: Self, body: exu.ObjectIndex, local_position: np.array) -> np.array:
         """Return the global position of local_position on body 'body'."""
-
         return self.mbs.GetObjectOutputBody(
             body,
             exu.OutputVariableType.Position,

@@ -6,11 +6,11 @@ from typing import Self
 import numpy as np
 import pint
 
-from .results import Results
-from .sling import Sling, RopeKinds
-from .shackle import Shackle
-from .lift_problem import LiftProblem
 from . import ureg
+from .lift_problem import LiftProblem
+from .results import Results
+from .shackle import Shackle
+from .sling import RopeKinds, Sling
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def angle_as_percent(angle: float) -> float:
 JINJA_TEMPLATES_FOLDER_NAME = "templates"
 RIGGING_REPORT_TEMPLATE_FILE_NAME = "rigging_report_template.jinja2"
 
-class CodeCheck():
+class CodeCheck:
     """Perform code check according to DNV-ST-N001."""
 
     DEFAULTS = {
@@ -73,6 +73,7 @@ class CodeCheck():
 
 
     def default_daf(self: Self, shl: pint.Quantity) -> float:
+        """Based on the static hook load, calculate the default offshore daf."""
         daf = None
 
         if shl <= 100 * ureg("t"):
@@ -91,6 +92,7 @@ class CodeCheck():
 
 
     def results(self: Self) -> dict:
+        """Return the code check results for all components."""
         for id, sling in self.simulation_results.slings.items():
             self.code_check_results["slings"][id] = self.check_sling(sling, self.problem.slings[id])
 
@@ -101,7 +103,7 @@ class CodeCheck():
 
 
 
-    def check_sling(self: Self, sling_results: dict, sling: Sling):
+    def check_sling(self: Self, sling_results: dict, sling: Sling) -> dict:
         """Check sling loading against capacity."""
         settings = self.get_settings(sling.id)
 
@@ -151,7 +153,7 @@ class CodeCheck():
         return 1 / (1 - 0.5/(D/d)**0.5)
 
 
-    def check_shackle(self: Self, shackle_results: Results, shackle: Shackle):
+    def check_shackle(self: Self, shackle_results: Results, shackle: Shackle) -> dict:
         """Check shackle loading against capacity."""
         settings = self.get_settings(shackle.id)
 
@@ -172,15 +174,14 @@ class CodeCheck():
             "id": shackle.id,
             "f_static": f_static.to_base_units(),
             "f_dynamic": f_dynamic.to_base_units(),
-#            "utilisation": max(ur_static, ur_dynamic_1, ur_dynamic_2),
             "daf": settings["daf"],
             "utilisation": utilisation,
             "pass": bool(utilisation <= 1.0),
         }
 
 
-    def get_settings(self, component_id=None):
-
+    def get_settings(self, component_id: str=None) -> dict:
+        """Get the settings that apply for a component."""
         # Use the defaults in nothing else is specified
         settings = self.DEFAULTS.copy()
 
@@ -190,7 +191,7 @@ class CodeCheck():
             if not isinstance(value, dict):
                 settings[key] = value
 
-        # Override problem-level overrides with any component overrides
+        # Override defaults and problem-level overrides with any component overrides
         if component_id:
             settings.update(
                 self.settings.get(

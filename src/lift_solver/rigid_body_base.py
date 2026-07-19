@@ -69,7 +69,7 @@ class RigidBodyBase:
         self.rotation = R_new @ self.rotation
 
 
-    def set_global_pose(self, position, rotation):
+    def set_global_pose(self, position: np.array(3), rotation: np.array(3)) -> None:
         """Set pose in global coordinates."""
         if self.parent is None:
             self.position = position
@@ -82,17 +82,14 @@ class RigidBodyBase:
             self.rotation = R_parent.T @ rotation
 
 
-    def set_local_pose(self, position, rotation):
-        """
-        Set pose relative to parent.
-        """
+    def set_local_pose(self, position: np.array, rotation: np.array) -> None:
+        """Set pose relative to parent."""
         self.position = position
         self.rotation = rotation
 
 
-    def relative_to(self, parent):
+    def relative_to(self, parent: "RigidBodyBase") -> tuple:
         """Return transform of self relative to given parent."""
-
         R_self = self.global_rotation()
         p_self = self.global_position()
 
@@ -137,14 +134,13 @@ class RigidBodyBase:
         return Rz @ Ry @ Rx
 
 
-    def _matrix_to_euler(self, R):
-        """
-        Inverse of _euler_to_matrix().
+    def _matrix_to_euler(self, R: np.array) -> np.array:
+        """Inverse of _euler_to_matrix().
 
         Returns:
             [rx, ry, rz] as pint angles.
-        """
 
+        """
         ry = np.arcsin(-R[2, 0])
 
         cy = np.cos(ry)
@@ -180,7 +176,7 @@ class RigidBodyBase:
     # -------------------------------
     # Export
     # -------------------------------
-    def to_dict(self):
+    def to_dict(self: Self) -> dict:
         """Create a dict representation of the class."""
         return {
             "id": self.id,

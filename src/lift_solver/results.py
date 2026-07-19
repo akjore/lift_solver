@@ -4,9 +4,12 @@ from typing import Self
 import numpy as np
 import pint
 
+
 class Results:
+    """Class to hold simulation results for all components."""
 
     def __init__(self: Self) -> None:
+        """Initialize class and set globals."""
         self.bodies = {}
         self.shackles = {}
         self.slings = {}
@@ -15,14 +18,12 @@ class Results:
 
 
     def export_initial_state(self: Self) -> str:
-        """
-        Export solver state into YAML-ready initial_state block.
+        """Export solver state into YAML-ready initial_state block.
 
         Rules:
         - parent=None  → export absolute pose
         - parent!=None → export pose relative to parent
         """
-
         lines = []
         lines.append("initial_state:")
         lines.append("  # format: [x, y, z, roll, pitch, yaw]")
@@ -54,6 +55,7 @@ class Results:
 
 
     def to_render_model(self: Self) -> dict:
+        """Create a dict representation of the results for export."""
         return {
             "bodies": [cnv_quantity(obj) for obj in self.bodies.values()],
             "shackles": [cnv_quantity(obj) for obj in self.shackles.values()],
@@ -61,14 +63,15 @@ class Results:
         }
 
 
-def cnv_quantity(value) -> dict:
+def cnv_quantity(value: dict | list | tuple | np.ndarray | pint.Quantity) -> dict:
+    """Recursive function to parse a dict and convert pint.Quantities to a dict."""
     if isinstance(value, dict):
         return {
             k: cnv_quantity(v)
             for k, v in value.items()
         }
 
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [
             cnv_quantity(v)
             for v in value

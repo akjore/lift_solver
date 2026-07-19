@@ -8,7 +8,7 @@ from typing import Self
 import numpy as np
 import pint
 
-from . import Q_, ureg
+from . import ureg
 from .attachment_point import AttachmentPoint
 from .constraint import PinConstraint
 from .rigid_body_base import RigidBodyBase
@@ -129,7 +129,8 @@ class Shackle(RigidBodyBase):
             )
 
 
-    def set_rotation_about_pin(self: Self, angle: pint.Quantity):
+    def set_rotation_about_pin(self: Self, angle: pint.Quantity) -> None:
+        """Set rotation of shackle about pin."""
         axis = self.pin.axis_local
         R_flip = self.rot_axis_angle(axis, angle)
         self.rotation = R_flip @ self.rotation

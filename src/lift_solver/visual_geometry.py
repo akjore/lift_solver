@@ -5,17 +5,22 @@ import numpy as np
 
 
 class Visual:
-    def to_dict(self):
+    """Class for visual representation of rigid bodies."""
+
+    def to_dict(self) -> dict:
+        """Create a dict representation of self. Overridden by children."""
         raise NotImplementedError
 
 
 class BoxVisual(Visual):
     """Class for box primitives."""
+
     pass
 
 
 class CylinderVisual(Visual):
     """Class for cylinder primitives."""
+
     pass
 
 
@@ -37,6 +42,7 @@ class MeshVisual(Visual):
         self.translation = translation if translation is not None else np.zeros(3)
 
     def to_dict(self: Self) -> dict:
+        """Create a dict representation of self for export."""
         return {
             "type": self.type,
             "file": self.file,

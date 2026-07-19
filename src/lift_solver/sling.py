@@ -25,19 +25,6 @@ class RopeKinds(Enum):
 class Rope:
     """Parent class for slings and grommets."""
 
-    # Cable laid slings - single leg - diameter and WLL from NS-EN 13414-3:2003+A1:2008, Annex G.6
-#    _CABLE_DIAMETER_MM = np.array([24, 27, 30, 33, 36, 39, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96, 102, 108, 114, 120,
-#                                   126,132, 144, 150, 156, 162, 168, 174, 180, 192, 204, 216, 228, 240, 252, 264, 276,
-#                                   288, 300,312, 336, 360, 384, 408, 432, 456, 480, 504, 528, 552, 576, 600, 624, 648,
-#                                   672, 696]) * ureg.millimeter
-#    _CABLE_WLL_t = np.array([3.35, 4.25, 5.5, 7, 8, 9.5, 11, 14.5, 18, 22.5, 28, 34, 41, 49, 58, 68, 79, 92, 106, 122,
-#                             139, 158, 204, 230, 250, 270, 290, 315, 335, 410, 460, 510, 555, 610, 665, 720, 780, 840,
-#                             900, 970, 1100, 1250, 1400, 1550, 1700, 1880, 2050, 2250, 2450, 2600, 2800, 3000, 3200,
-#                             3400, 3650, 3850]) * ureg.ton
-#    _SF = 6.33 - 0.022 * _CABLE_DIAMETER_MM.to("mm").magnitude
-#    _CABLE_MBL_t = _CABLE_WLL_t * _SF
-
-
     def __init__(self: Self, id: str) -> None:
         """Initialise rope object."""
         self.id = id
@@ -50,6 +37,7 @@ class Rope:
 
     def _estimate_mbl(self: Self, kind: RopeKinds, diameter: float) -> float:
         """Estimate the mbl (mass units) based on the diameter. Ref. ISO 19901-6:2009, Sec. 18.4.2.
+
         It is assumed that HMPE has the same strength as steel wire rope with the same diameter.
         """
         mbl = None
@@ -179,6 +167,7 @@ class Rope:
         self._mass_per_length = value
 
     def to_dict(self: Self) -> dict:
+        """Create a dict for export."""
         return {
             "id": self.id,
             "diameter": self.diameter,
@@ -346,11 +335,13 @@ class Sling(Rope):
 
     @property
     def eye_a_separation_angle(self: Self) -> pint.Quantity:
+        """Return the angle between the two tangents of the legs of the eye."""
         return self._sling_eye_separation_angle(self.length_eye_a, self.end_a, self.diameter)
 
 
     @property
     def eye_b_separation_angle(self: Self) -> pint.Quantity:
+        """Return the angle between the two tangents of the legs of the eye."""
         return self._sling_eye_separation_angle(self.length_eye_b, self.end_b, self.diameter)
 
 
@@ -401,7 +392,7 @@ class Sling(Rope):
         if end.type == "pin" and end.diameter and rope_diameter:
             r = end.diameter/2 + rope_diameter/2
 
-            f = lambda x: math.tan(x) - x - l_eye / r + math.pi
+            f = lambda x: math.tan(x) - x - l_eye / r + math.pi     # noqa: E731
             try:
                 alpha = newton(func=f, x0=math.pi / 2 * 0.99)
             except Exception:
@@ -413,6 +404,7 @@ class Sling(Rope):
 
 
     def to_dict(self: Self) -> dict:
+        """Create a dict representation of the sling for export."""
         ret = super().to_dict()
 
         return ret | {
@@ -436,19 +428,3 @@ class Sling(Rope):
                 "apex_offset": self.eye_b_apex_offset,
             },
         }
-#        ret["rope_kind"] = self.kind.name
-#        ret["end_a"] = self.end_a.to_dict()
-#        ret["end_b"] = self.end_b.to_dict()
-#        ret["sheaves"] = [s.to_dict() for s in self.sheaves]
-#        ret["eye_a"] = {
-#            "length_splice": self.length_splice_a,
-#            "separation_angle": self.eye_a_separation_angle,
-#            "apex_offset": self.eye_a_apex_offset,
-#        }
-#        ret["eye_b"] = {
-#            "length_splice": self.length_splice_b,
-#            "separation_angle": self.eye_b_separation_angle,
-#            "apex_offset": self.eye_b_apex_offset,
-#        }
-
-#        return ret

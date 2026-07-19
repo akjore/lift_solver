@@ -164,7 +164,7 @@ class LiftProblem:
         self.connections[cn.id] = cn
 
 
-    def normalize_units(self: Self, obj: object, key=None) -> object:
+    def normalize_units(self: Self, obj: object, key: Sequence | Mapping | str=None) -> object:
         """Recursively convert YAML-loaded structure into Pint quantities."""
         # --- dict ---
         if isinstance(obj, Mapping):
@@ -213,18 +213,17 @@ class LiftProblem:
         return isinstance(value, int | float | str)
 
 
-    def apply_initial_state(self: Self, initial_state: dict):
-        """
-        Apply initial_state using RigidBodyBase methods.
+    def apply_initial_state(self: Self, initial_state: dict) -> None:
+        """Apply initial_state using RigidBodyBase methods.
 
         Rules:
         - parent=None  → absolute (global) pose
         - parent!=None → local (relative) pose
         """
-
         resolved = set()
 
-        def parse_pose(values):
+        def parse_pose(values: list) -> tuple:
+            """Parse a 6D list into a 3D list for position, and 3D for orientation."""
             # [x, y, z, rx, ry, rz] with units
             x, y, z, rx, ry, rz = values
 
@@ -282,27 +281,29 @@ class LiftProblem:
                     f"Could not resolve initial_state; unresolved: {unresolved}"
                 )
 
-    def to_render_model(self):
+    def to_render_model(self: Self) -> dict:
+        """Prepare a dict representation of the lift problem for exportation."""
         return {
             "bodies": [self._render_dict(obj) for obj in self.bodies.values()],
             "shackles": [self._render_dict(obj) for obj in self.shackles.values()],
             "slings": [self._render_dict(obj) for obj in self.slings.values()]
         }
 
-    def _render_dict(self, obj):
+    def _render_dict(self: Self, obj: RigidBody|Shackle|Sling) -> dict:
         d = obj.to_dict()
 
         return cnv_quantity(d)
 
 
-def cnv_quantity(value) -> dict:
+def cnv_quantity(value: dict | list | tuple | np.ndarray | pint.Quantity) -> dict:
+    """Recursive function for converting pint quantities to dicts."""
     if isinstance(value, dict):
         return {
             k: cnv_quantity(v)
             for k, v in value.items()
         }
 
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [
             cnv_quantity(v)
             for v in value
@@ -315,8 +316,6 @@ def cnv_quantity(value) -> dict:
         val = value
         if val.check("[length]"):
             val.ito("m")
-#        elif value.check("[mass]"):
-#            val.ito("kg")
         elif value.check("[]"):
             val.ito("rad")
 

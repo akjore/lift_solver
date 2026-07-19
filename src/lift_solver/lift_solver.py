@@ -1,9 +1,8 @@
 """Main entry module for setting up and solving a lift problem."""
 import logging
 
-from . import lift_problem
+from . import exu_problem, exu_solver, lift_problem
 from .code_check import CodeCheck
-from . import exu_problem, exu_solver
 
 
 def setup_logging() -> None:
@@ -16,7 +15,6 @@ def setup_logging() -> None:
 
 def solve_problem(problem: str) -> None:
     """Set up and solve lifting problem."""
-
     # Parse the problem into a model. Problem is a yaml-formatted string.
     prb = lift_problem.LiftProblem().from_yaml(problem)
 

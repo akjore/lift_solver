@@ -1,6 +1,7 @@
 """Module for handling rigid bodies."""
-import numpy as np
 from typing import Self
+
+import numpy as np
 
 from . import ureg
 from .attachment_point import AttachmentPoint
@@ -17,7 +18,7 @@ class RigidBody(RigidBodyBase):
         self.size = np.array([0, 0, 0]) * ureg.meter
 
 
-    def from_dict(self: Self, **kwargs) -> None:
+    def from_dict(self: Self, **kwargs: dict) -> None:
         """Set body values based on values proviced in dict."""
         self.mass = kwargs.get("mass")
         self.cog = kwargs.get("cog")
