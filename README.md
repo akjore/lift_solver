@@ -4,6 +4,8 @@ A YAML-driven multibody lifting and rigging solver built on
 [**Exudyn**](https://github.com/jgerstmayr/EXUDYN),
 an open-source multibody dynamics simulation framework.
 
+The current version of the application is available on [**Github Pages**](https://akjore.github.io/lift_solver/).
+
 ---
 
 ## 🚀 Overview
