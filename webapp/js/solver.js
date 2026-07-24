@@ -1,6 +1,5 @@
 const DEV_MODE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
-console.log("window.location.pathname: ", window.location.pathname);
 const BASE_PATH = window.location.pathname.startsWith("/lift-solver/") ? "/lift-solver" : "";
 
 export async function loadProblem(problem, pyodide) {
@@ -56,7 +55,7 @@ sys.path.append("/")
 
 await micropip.install("numpy")
 await micropip.install("numpy-stl")
-#await micropip.install("exudyn")
+# await micropip.install("exudyn")
 await micropip.install("pyyaml")
 await micropip.install("pint")
 await micropip.install("scipy")
@@ -138,10 +137,11 @@ async function loadSolverFromWheel(pyodide) {
 
   console.log(`Loading .whl from ${wheelUrl}`);
 
-  await pyodide.loadPackage("micropip");
+//  await pyodide.loadPackage("micropip");
   const micropip = pyodide.pyimport("micropip");
 
   await micropip.install(wheelUrl);
+  console.log("Completed loading.");
 
 //  await pyodide.runPythonAsync(`
 //import micropip
