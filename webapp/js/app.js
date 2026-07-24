@@ -1,6 +1,5 @@
 import { initRenderer, renderProblem } from "./renderer.js";
 import { loadProblem, solveProblem, initializePyodide } from "./solver.js";
-import { VERSION } from "./version.js";
 
 let problemData = null;
 let pyodide;

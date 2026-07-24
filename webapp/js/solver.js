@@ -1,5 +1,6 @@
-const DEV_MODE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+import { VERSION } from "./version.js";
 
+const DEV_MODE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 const BASE_PATH = window.location.pathname.startsWith("/lift-solver/") ? "/lift-solver" : "";
 
 export async function loadProblem(problem, pyodide) {
