@@ -185,8 +185,7 @@ jobs:
 # 5. CREATE RELEASE AND ATTACH WHEEL
 # --------------------------------------------------
   release:
-#    needs: [build, tag]
-    needs: [build]
+    needs: [build, tag]
     runs-on: ubuntu-latest
 
     steps:
