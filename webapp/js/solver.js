@@ -138,6 +138,9 @@ async function loadSolverFromWheel(pyodide) {
 
   console.log(`Loading .whl from ${wheelUrl}`);
 
+  await pyodide.loadPackage("micropip");
+  const micropip = pyodide.pyimport("micropip");
+
   await micropip.install(wheelUrl);
 
 //  await pyodide.runPythonAsync(`
