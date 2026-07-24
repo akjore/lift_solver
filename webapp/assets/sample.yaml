@@ -1,6 +1,5 @@
 meta:
-  name: "WHRU A Removal"
-#  frame: global
+  name: "LQE installation"
 
 environment:
   gravity: [0.0 m/s**2, 0.0m/s**2, -9.81 m/s**2]
@@ -9,99 +8,100 @@ environment:
 # Bodies
 # ----------------------------------------------------------
 bodies:
-
-  - id: load
-    mass: 57.4 t * 1.2
+  - id: LQE
+    mass: 200 t * 1.2 + 14 t # offshore lift weight w/rigging
 
     # --- Local definition ---
-    cog: [62.626 m, 277.228 m, 561.733 m] # Ref. dwg 104304-ASS-N-0061, x - east
+    cog: [262.350 m, 531.000 m, 64.450 m]
 
-    points:
-#      lp1: [(62.626 - 1.614) m , (277.228 + 1.838) m, (561.733 + 4.841) m]
-#      lp2: [(62.626 - 1.614) m , (277.228 - 1.997) m, (561.733 + 4.841) m]
-#      lp3: [(62.626 + 3.464) m , (277.228 + 2.096) m, (561.733 - 0.238) m]
-#      lp4: [(62.626 + 3.464) m , (277.228 - 2.184) m, (561.733 - 0.238) m]
+    points: # Ref. measurements in T&I model. See dwg. C056-LE-N-XF-0744-01 once available.
       - id: lp1
-        position: [(62.626 - 1.614) m , (277.228 + 1.838) m, (561.733 + 4.841) m]
-        type: hole
+        position: [(257.775+258.135)/2 m, 527.592 m, (69.638+69.803)/2 m]
+        type: pin
         axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
       - id: lp2
-        position: [(62.626 - 1.614) m , (277.228 - 1.997) m, (561.733 + 4.841) m]
-        type: hole
+        position: [(257.775+258.135)/2 m, 534.492 m, (69.638+69.803)/2 m]
+        type: pin
         axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
       - id: lp3
-        position: [(62.626 + 3.464) m , (277.228 + 2.096) m, (561.733 - 0.238) m]
-        type: hole
+        position: [(267.225+266.865)/2 m, 527.592 m, (69.638+69.803)/2 m]
+        type: pin
         axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
       - id: lp4
-        position: [(62.626 + 3.464) m , (277.228 - 2.184) m, (561.733 - 0.238) m]
-        type: hole
+        position: [(267.225+266.865)/2 m, 534.492 m, (69.638+69.803)/2 m]
+        type: pin
         axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
 
-    # --- Global placement ---
+    # --- Global placement of the CoG ---
     pose:
-      position: [-62.626 m, -277.228 m, -561.733 m]
-#      position: [-60.0 m, -275 m, -561. m]
-#      position: [-63.17284461954304 m, -277.2192608910865 m, -559.3989726885953 m ]
-#      position: [-63.39335517601396 m, -277.21516072068005 m, -559.4115923420442 m]
-#      position: [-63.59563254520982 m, -277.21156163216756 m, -559.4351978802139 m]
-      orientation: [0.0 degree, 0.0 degree, 0.0 degree]   # Euler (for now)
+      position: [-262.350 m, -531.000 m, -64.450 m]
+      orientation: [0.0 degree, 0.0 degree, 0.0 degree]
 
-    # --- Optional visual representation ---
+    # --- Optional visual representation, offset relative to CoG ---
     visual:
       type: box
-      size: [(3.464 + 1.614) m, (1.997 + 1.838) m, (4.733 + 4.841) m]   # length, width, height
-      offset: [0 m, 0 m, 0 m]        # relative to CoG
-      color: 0x888888
-      opacity: 0.2
+      size: [9.5 m, 16.2 m, 10.2 m]   # length, width, height
+#      offset: [262.350 m - (257.750+267.244)/2 m, 531.0 m - (522.512+528.725)/2 m, 64.450 m - (59.093+69.320)/2 m]
+      offset: [0 m, 0 m, 0 m]
+#      color: 0x888888
+      opacity: 0.4
 
-  - id: spreader
-    mass: 1.2 t
+  - id: SAI.SB-78
+    mass: 7.585 t
 
     # --- Local definition ---
     cog: [0.0 m, 0.0 m, 0.0 m]
 
-    points:
-#      left_lower:  [-2.590 m, 0.0 m, -0.350 m]
-#      left_upper:  [-2.430 m, 0.0 m,  0.350 m]
-#      right_lower: [ 2.590 m, 0.0 m, -0.350 m]
-#      right_upper: [ 2.430 m, 0.0 m,  0.350 m]
-      - id: left_lower
-        position: [-2.590 m, 0.0 m, -0.350 m]
+    points: # Taken from rigging report SA-X2-R-14008; update when dwg available.
+      - id: west_lower
+        position: [4.545 m, 0.0 m, -0.630 m]
         axis: [0, 1, 0]
-        type: hole
-      - id: left_upper
-        position: [-2.430 m, 0.0 m,  0.350 m]
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
+      - id: west_upper
+        position: [4.410 m, 0.0 m,  0.630 m]
         axis: [0, 1, 0]
-        type: hole
-      - id: right_lower
-        position: [ 2.590 m, 0.0 m, -0.350 m]
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
+      - id: east_lower
+        position: [-4.545 m, 0.0 m, -0.630 m]
         axis: [0, 1, 0]
-        type: hole
-      - id: right_upper
-        position: [ 2.430 m, 0.0 m,  0.350 m]
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
+      - id: east_upper
+        position: [-4.410 m, 0.0 m,  0.630 m]
         axis: [0, 1, 0]
-        type: hole
-      - id: test
-        position: [ 1.20 m, 0.0 m,  -0.350 m]
-        axis: [0, -1, 0]
-        type: hole
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
 
     # --- Global placement ---
     pose:
-      position: [0.0 m, 0.0 m, 15.0 m]
-#      position: [1.7763484973045847 m, -0.011893427691721484 m, 11.112420533563558 m]
-#      position: [1.6445347596122633 m, -0.010194646759313716 m, 11.096047536455334 m]
-#      position: [1.5212092824817596 m, -0.009048508454245853 m, 11.081645782741267 m]
-      orientation: [0.0 degree, 0.0 degree, -90.0 degree]
+      position: [0.0 m, 0.0 m, 17.0 m]
+      orientation: [0.0 degree, 0.0 degree, 180.0 degree]
 
     # --- Optional visual representation ---
     visual:
       type: cylinder
-      diameter: 0.3239
-      length: 5.680
-      axis: x       # important for orientation
-      color: 0x0066cc
+      diameter: 0.3239 m
+      length: 10.0 m
+      axis: x
+#      color: 0x0066cc
 
   - id: hook
     mass: 0 t
@@ -109,42 +109,46 @@ bodies:
     cog: [0.0 m, 0.0 m, 0.0 m]
 
     points:
-#      hook: [0.0 m, 0.0 m, 0.0 m]
-#      socket: [0.0 m, 0.0 m, 1.0 m]
-      - id: hook
-        position: [0.0 m, 0.0 m, 0.0 m]
-#        axis: [0, 1, 0]
-#        type: pin
+      - id: prong1
+        position: [530 mm, 0.0 m, 0.0 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 420 mm
+        length: 420 mm
+      - id: prong2
+        position: [-530 mm, 0.0 m, 0.0 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 420 mm
+        length: 420 mm
       - id: socket
         position: [0.0 m, 0.0 m, 1.0 m]
 
     pose:
-      position: [0.0 m, 0.0 m, 25.0 m]
+      position: [0.0 m, 0.0 m, 30.0 m]
       orientation: [0.0 degree, 0.0 degree, 0.0 degree]
 
 # ----------------------------------------------------------
 # Shackles
 # ----------------------------------------------------------
 shackles:
-  - id: sh1
-    model: GP55
-    pin_connection: spreader.left_upper
+  - id: UpWest
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.west_upper
 
-  - id: sh2
-    model: GP55
-    pin_connection: spreader.right_upper
+  - id: UpEast
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.east_upper
 
-  - id: sh3
-    model: GP55
+  - id: LowWest
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.west_lower
+    rotation_about_pin: 180 deg
 
-    pose:
-      position: [1.0 m, 2.0 m, 10.0 m]
-      orientation: [0 deg, 0 deg, 0 deg]
-
-  - id: sh4
-    model: GP55
-    pin_connection: spreader.test
-    rotation_about_pin: 45 deg
+  - id: LowEast
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.east_lower
+    rotation_about_pin: 180 deg
 
 # ----------------------------------------------------------
 # Elements
@@ -154,74 +158,101 @@ shackles:
 # ----------------------------------------------------------
 elements:
 
-  - id: SL1
-    ap1: load.lp1
-    ap2: spreader.left_lower
-#    ap2: sh1.bow
-    Lultimate: 9.269 m
-    k: 5900 kN/m
-    diameter: 25 mm
+  - id: lower_NE
+    ap1: LQE.lp4
+    ap2: LowEast.bow
+    Lultimate: 11.525 m
+#    k: 5900 kN/m
+#    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
 
-  - id: SL2
-    ap1: load.lp2
-    ap2: spreader.right_lower
-#    ap2: sh2.bow
-    Lultimate: 9.269 m
-    k: 5900 kN/m
-    diameter: 25 mm
+  - id: lower_NW
+    ap1: LQE.lp2
+    ap2: LowWest.bow
+    Lultimate: 11.525 m
+#    k: 5900 kN/m
+    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
 
-  - id: SL3
-    ap1: load.lp3
-    ap2: spreader.left_lower
-#    ap2: sh1.bow
-    Lultimate: 8.669 m
-    k: 6200 kN/m
-    diameter: 25 mm
+  - id: lower_SE
+    ap1: LQE.lp3
+    ap2: LowEast.bow
+    Lultimate: 11.500 m
+#    k: 6200 kN/m
+    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
 
-  - id: SL4
-    ap1: load.lp4
-    ap2: spreader.right_lower
-#    ap2: sh2.bow
-    Lultimate: 8.669 m
-    k: 6200 kN/m
-    diameter: 25 mm
+  - id: lower_SW
+    ap1: LQE.lp1
+    ap2: LowWest.bow
+    Lultimate: 11.500 m
+#    k: 6200 kN/m
+    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
 
-  - id: sling_5
-#    ap1: spreader.left_upper
-    ap1: sh1.bow
-#    ap1: sh1.pin
-    ap2: hook.hook
-    Lultimate: 13.830 m
-    k: 9400 kN/m
-    diameter: 25 mm
+  - id: upper_E
+    ap1: UpEast.bow
+    ap2: hook.prong1
+    Lultimate: 10.103 m
+#    k: 9400 kN/m
+    diameter: 112 mm
+    kind: HMPE
+    mbl: 754 t
 
-  - id: sling_6
-#    ap1: spreader.right_upper
-    ap1: sh2.bow
-#    ap1: sh2.pin
-    ap2: sh3.pin
-    Lultimate: 6.5 m
-    k: 9400 kN/m
-    diameter: 25 mm
-
-  - id: sling_7
-    ap1: sh3.bow
-#    ap1: sh2.bow
-#    ap1: sh2.pin
-    ap2: hook.hook
-    Lultimate: 6.5 m
-    k: 9400 kN/m
-    diameter: 25 mm
+  - id: upper_W
+    ap1: UpWest.bow
+    ap2: hook.prong2
+    Lultimate: 10.000 m
+#    k: 9400 kN/m
+    diameter: 112 mm
+    kind: HMPE
+    mbl: 754 t
 
 # ----------------------------------------------------------
 # Constraints
 # ----------------------------------------------------------
 constraints:
 
-  - ap1: hook.socket
+  - id: hook_restraint
+    ap1: hook.socket
     ap2: world
-    constraints: [true, true, true, true, true, true]
+    constraints: [true, true, true, false, false, true]
 
-#  - body: hook
-#    point: socket
-#    constraints: [true, true, true, true, true, true]
+code_check:
+  k_skl: 1.1
+
+#  daf: 1.10
+
+  SAI.SB-78:
+    daf: 1.3
+
+  lower_NE:
+    daf: 1.4
+
+  LowEast:
+    gamma_w: 1.10
+
+  upper_W:
+    gamma_w: 1.05
+
+# ----------------------------------------------------------
+# Solver-generated state
+# ----------------------------------------------------------
+initial_state:
+  # format: [x, y, z, roll, pitch, yaw]
+  #
+  # IMPORTANT:
+  # - Bodies WITHOUT a parent are absolute (global)
+  # - Bodies WITH a parent are relative to their parent
+
+  LQE: [-262.30882 meter, -530.9881 meter, -63.733567 meter, 0.007523813 degree, -0.044668259 degree, -0.00074939514 degree]
+  SAI.SB-78: [0.14128696 meter, -2.2284277e-05 meter, 18.944554 meter, 0.00028886089 degree, 0.018232938 degree, 179.99855 degree]
+  hook: [0.013793991 meter, 0.00024112432 meter, 30.000094 meter, 0.013815391 degree, -0.79036001 degree, -7.1802824e-07 degree]
+  UpWest: [4.41 meter, 1.3465314e-11 meter, 0.63 meter, -19.86656 degree, -1.1063007e-12 degree, 90 degree]
+  UpEast: [-4.41 meter, -1.3442244e-11 meter, 0.63 meter, 21.042221 degree, -5.9858066e-13 degree, 90 degree]
+  LowWest: [4.545 meter, 1.3854094e-11 meter, -0.63 meter, -179.99156 degree, 1.4294425e-11 degree, -90 degree]
+  LowEast: [-4.545 meter, -1.3877138e-11 meter, -0.63 meter, -179.99153 degree, -5.8499833e-11 degree, -90 degree]

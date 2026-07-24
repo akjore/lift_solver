@@ -2,4 +2,5 @@ numpy
 numpy-stl
 pyyaml
 pint
+# exudyn	temporarily commented out and marked as optional in pyproject.toml until resolved w/pyodide
 
