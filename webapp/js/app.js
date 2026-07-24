@@ -11,7 +11,7 @@ let problemYaml = null;
 // --------------------------------------------------
 async function loadDefaultYaml() {
   try {
-    const response = await fetch("/webapp/assets/sample.yaml");
+    const response = await fetch("webapp/assets/sample.yaml");
 
     if (!response.ok) {
       throw new Error(`Failed to load YAML: ${response.status}`);
