@@ -81,76 +81,76 @@ jobs:
 # --------------------------------------------------
 # 3. TAG AND VERSION FILE
 # --------------------------------------------------
-#  tag:
-#    needs: test
-#    runs-on: ubuntu-latest
-#    if: github.ref == 'refs/heads/main'
+  tag:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
 
-#    outputs:
-#      tag: ${{ steps.tagger.outputs.tag }}
+    outputs:
+      tag: ${{ steps.tagger.outputs.tag }}
 
-#    steps:
-#      - name: Checkout repo
-#        uses: actions/checkout@v6
-#        with:
-#          fetch-depth: 0
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-#      - name: Configure Git
-#        run: |
-#          git config --global user.email "akjore@outlook.com"
-#          git config --global user.name "akj"
+      - name: Configure Git
+        run: |
+          git config --global user.email "akjore@outlook.com"
+          git config --global user.name "akj"
 
-#      - name: Sync repo
-#        run: git pull origin main
+      - name: Sync repo
+        run: git pull origin main
 
-#      - name: Fetch all tags
-#        run: git fetch --tags
+      - name: Fetch all tags
+        run: git fetch --tags
 
-#      - name: Generate tag
-#        id: tagger
-#        run: |
-#          DATE=$(date +'%Y.%-m.%-d')
-#          MATCHING=$(git tag -l "${DATE}*")
+      - name: Generate tag
+        id: tagger
+        run: |
+          DATE=$(date +'%Y.%-m.%-d')
+          MATCHING=$(git tag -l "${DATE}*")
 
-#          if [ -z "$MATCHING" ]; then
-#            TAG="$DATE"
-#          else
-#            MAX_N=0
-#            for t in $MATCHING; do
-#              if [[ "$t" =~ ^${DATE}\.post([0-9]+)$ ]]; then
-#                n="${BASH_REMATCH[1]}"
-#                if (( n > MAX_N )); then MAX_N=$n; fi
-#              fi
-#            done
-#            TAG="${DATE}.post$((MAX_N + 1))"
-#          fi
+          if [ -z "$MATCHING" ]; then
+            TAG="$DATE"
+          else
+            MAX_N=0
+            for t in $MATCHING; do
+              if [[ "$t" =~ ^${DATE}\.post([0-9]+)$ ]]; then
+                n="${BASH_REMATCH[1]}"
+                if (( n > MAX_N )); then MAX_N=$n; fi
+              fi
+            done
+            TAG="${DATE}.post$((MAX_N + 1))"
+          fi
 
-#          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-#      - name: Create tag
-#        run: |
-#          git tag ${{ steps.tagger.outputs.tag }}
+      - name: Create tag
+        run: |
+          git tag ${{ steps.tagger.outputs.tag }}
 
-#      - name: Write version file
-#        run: |
-#          echo "export const VERSION = '${{ steps.tagger.outputs.tag }}';" > webapp/js/version.js
+      - name: Write version file
+        run: |
+          echo "export const VERSION = '${{ steps.tagger.outputs.tag }}';" > webapp/js/version.js
 
-#      - name: Commit version file
-#        run: |
-#          git add webapp/js/version.js
-#          git commit -m "Update version ${{ steps.tagger.outputs.tag }}" || echo "No changes"
+      - name: Commit version file
+        run: |
+          git add webapp/js/version.js
+          git commit -m "Update version ${{ steps.tagger.outputs.tag }}" || echo "No changes"
 
-#      - name: Push commit and tag
-#        run: |
-#          git push origin main
-#          git push origin ${{ steps.tagger.outputs.tag }}
+      - name: Push commit and tag
+        run: |
+          git push origin main
+          git push origin ${{ steps.tagger.outputs.tag }}
 
 
 # --------------------------------------------------
 # 4. BUILD WHEEL
 # --------------------------------------------------
   build:
-#    needs: tag
+    needs: tag
     runs-on: ubuntu-latest
 
     steps:
@@ -199,8 +199,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-#          tag_name: ${{ needs.tag.outputs.tag }}
-#          name: Release ${{ needs.tag.outputs.tag }}
+          tag_name: ${{ needs.tag.outputs.tag }}
+          name: Release ${{ needs.tag.outputs.tag }}
           files: dist/*.whl
 
 
@@ -208,8 +208,7 @@ jobs:
 # 6. DEPLOY TO GH-PAGES
 # --------------------------------------------------
   deploy_pages:
-#    needs: [build, tag]
-    needs: [build]
+    needs: [build, tag]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 

@@ -133,7 +133,7 @@ function ensureDirectory(pyodide, filePath) {
 }
 
 async function loadSolverFromWheel(pyodide) {
-  const wheelUrl = `wheels/lift_solver-0.0.1-py3-none-any.whl`;
+  const wheelUrl = `wheels/lift_solver-${VERSION}-py3-none-any.whl`;
 
   console.log(`Loading .whl from ${wheelUrl}`);
 
