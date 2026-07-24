@@ -2,9 +2,17 @@
 import logging
 from typing import Self
 
-import exudyn as exu
+# Temporary workaround while making exudyn available in pyodide
+try:
+    import exudyn as exu
+    from exudyn import graphics
+except ImportError:
+    exu = None
+    graphics = None
+
+# import exudyn as exu
 import numpy as np
-from exudyn import graphics
+#from exudyn import graphics
 
 from .attachment_point import AttachmentPoint
 from .constraint import Constraint, PinConstraint, World
