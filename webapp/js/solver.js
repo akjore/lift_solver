@@ -1,4 +1,6 @@
-const DEV_MODE = true;
+const DEV_MODE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+const BASE_PATH = window.location.pathname.startsWith("/lift-solver/") ? "/lift-solver" : "";
 
 export async function loadProblem(problem, pyodide) {
   pyodide.globals.set("problem", problem);
@@ -65,7 +67,7 @@ await micropip.install("scipy")
 
 
 async function loadSolver(pyodide) {
-  console.log("Loading solver");
+  console.log(`Loading solver (${DEV_MODE ? "source" : "wheel"})`);
 
   if (DEV_MODE) {
     await loadSolverFromSource(pyodide);
@@ -76,7 +78,7 @@ async function loadSolver(pyodide) {
 
 export async function loadSolverFromSource(pyodide) {
 
-    const manifest = await fetch("/manifest.json")
+    const manifest = await fetch(`${BASE_PATH}/manifest.json`)
         .then(r => r.json());
 
     for (const sourcePath of manifest.files) {
