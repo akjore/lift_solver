@@ -136,7 +136,7 @@ async function loadSolverFromWheel(pyodide) {
 
   await pyodide.runPythonAsync(`
 import micropip
-await micropip.install("/dist/lift_solver-0.1.0-py3-none-any.whl")
+await micropip.install("${BASE_PATH}/dist/lift_solver-0.1.0-py3-none-any.whl")
 `);
 }
 
