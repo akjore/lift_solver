@@ -5,3 +5,4 @@
 build
 desktop.ini
 *.whl
+webapp/node_modules/

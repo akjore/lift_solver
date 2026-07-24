@@ -223,7 +223,6 @@ jobs:
         run: |
           git pull origin main
 
-
       - name: Download wheel artifact
         uses: actions/download-artifact@v8
         with:
@@ -235,6 +234,11 @@ jobs:
           rm -rf webapp/wheels
           mkdir -p webapp/wheels
           cp wheels/*.whl webapp/wheels/
+
+      - name: Copy assets
+        run: |
+          mkdir -p webapp/assets/shackles
+          cp src/lift_solver/data/shackles/*.stl webapp/assets/shackles/
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
