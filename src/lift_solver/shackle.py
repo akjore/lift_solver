@@ -2,6 +2,7 @@
 
 import csv
 import logging
+from importlib.resources import files
 from pathlib import Path
 from typing import Self
 
@@ -15,7 +16,6 @@ from .rigid_body_base import RigidBodyBase
 from .visual_geometry import MeshVisual
 
 logger = logging.getLogger(__name__)
-PACKAGE_ROOT = Path(__file__).parent
 
 
 class Transform:
@@ -474,7 +474,10 @@ class CrosbyAdapter(BaseAdapter):
     def __init__(self: Self) -> None:
         """Initialize."""
         super().__init__(
-            resource_path = PACKAGE_ROOT / "data" / "shackles",
+            resource_path = files("lift_solver").joinpath(
+                "data",
+                "shackles"
+            ),
             filename = "crosby_shackles.csv",
         )
 
@@ -503,7 +506,10 @@ class GnAdapter(BaseAdapter):
     def __init__(self: Self) -> None:
         """Initialize."""
         super().__init__(
-            resource_path = PACKAGE_ROOT / "data" / "shackles",
+            resource_path = files("lift_solver").joinpath(
+                "data",
+                "shackles"
+            ),
             filename = "gn_shackles.csv",
         )
 
@@ -532,8 +538,11 @@ class GreenPinAdapter(BaseAdapter):
     def __init__(self: Self) -> None:
         """Initialize."""
         super().__init__(
-             resource_path = PACKAGE_ROOT / "data" / "shackles",
-           filename = "gp_shackles.csv",
+            resource_path = files("lift_solver").joinpath(
+                "data",
+                "shackles"
+            ),
+            filename = "gp_shackles.csv",
         )
 
     def map_row(self: Self, row: dict) -> Shackle:

@@ -37,7 +37,8 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        working-directory: webapp
+        run: npm ci
 
       - name: Run Python lint
         run: ruff check . || true
@@ -179,6 +180,10 @@ jobs:
         with:
           name: wheel
           path: dist/*.whl
+
+      - name: Verify package assets
+        run: |
+          unzip -l dist/*.whl | grep -E "(csv|stl)"
 
 
 # --------------------------------------------------

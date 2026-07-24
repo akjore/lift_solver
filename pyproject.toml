@@ -2,8 +2,14 @@
 requires = [ "setuptools>=61", "wheel", "setuptools-git-versioning", ]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.package-data]
-"*" = ["*.yaml", "*.html", "*.css", "*.template", "*.csv", "*.stl"]
+lift_solver = [
+  "data/shackles/*.csv",
+  "data/shackles/*.stl",
+]
 
 [tool.setuptools-git-versioning]
 enabled = true
