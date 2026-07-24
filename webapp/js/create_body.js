@@ -6,8 +6,8 @@ const stlCache = new Map();
 const stlLoader = new STLLoader();
 
 const ASSETS = {
-  "shackle_gp800.stl": "/assets/shackles/shackle_gp800.stl",
-  "shackle_gp800_wb.stl": "/assets/shackles/shackle_gp800_wb.stl"
+  "shackle_gp800.stl": "assets/shackles/shackle_gp800.stl",
+  "shackle_gp800_wb.stl": "assets/shackles/shackle_gp800_wb.stl"
 };
 
 export async function createBody(body) {
