@@ -29,6 +29,7 @@ class MeshVisual(Visual):
 
     def __init__(
             self: Self,
+            folder: str,
             file: str,
             scale: float = 1.0,
             rotation: np.array(3) = None,
@@ -36,6 +37,7 @@ class MeshVisual(Visual):
         ) -> None:
         """Initialize Mesh object."""
         self.type = "stl"
+        self.folder = folder
         self.file = file
         self.scale = scale
         self.rotation = rotation if rotation is not None else np.eye(3)

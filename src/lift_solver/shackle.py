@@ -117,11 +117,14 @@ class Shackle(RigidBodyBase):
         self.transform = Transform()
 
         if self.id:
-            file = "lift_solver/data/shackles/shackle_gp800.stl"
+#            file = "lift_solver/data/shackles/shackle_gp800.stl"
+            file = "shackle_gp800.stl"
             if self.sub_type == "WideBody":
-                file = "lift_solver/data/shackles/shackle_gp800_wb.stl"
+#                file = "lift_solver/data/shackles/shackle_gp800_wb.stl"
+                file = "shackle_gp800_wb.stl"
 
             self.visual = MeshVisual(
+                folder = "lift_solver/data/shackles/",
                 file = file,
                 scale = self._visual_scale / 1000,
                 rotation = self._stl_to_shackle_rotation(),

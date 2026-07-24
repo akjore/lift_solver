@@ -5,6 +5,10 @@ import { STLLoader } from "three/addons/loaders/STLLoader.js";
 const stlCache = new Map();
 const stlLoader = new STLLoader();
 
+const ASSETS = {
+  "shackle_gp800.stl": "/assets/shackles/shackle_gp800.stl",
+  "shackle_gp800_wb.stl": "/assets/shackles/shackle_gp800_wb.stl"
+};
 
 export async function createBody(body) {
   // create groups
@@ -184,7 +188,8 @@ async function loadSTLGeometry(file) {
     const geometry = await new Promise((resolve, reject) => {
 
         stlLoader.load(
-            `/src/${file}`,
+//            `/src/${file}`,
+            ASSETS[file],
             resolve,
             undefined,
             reject
