@@ -39,6 +39,11 @@ license = "MIT"
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
+[project.optional-dependencies]
+exudyn = [
+  "exudyn"
+]
+
 [project.urls]
 "Homepage" = "https://github.com/akjore/lift_solver"
 "Bug Tracker" = "https://github.com/akjore/lift_solver/issues"

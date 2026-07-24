@@ -1,6 +1,5 @@
 numpy
 numpy-stl
-exudyn
 pyyaml
 pint
 

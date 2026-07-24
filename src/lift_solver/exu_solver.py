@@ -2,13 +2,7 @@
 import logging
 from typing import Self
 
-# Temporary workaround while making exudyn available in pyodide
-try:
-    import exudyn as exu
-except ImportError:
-    exu = None
-
-# import exudyn as exu
+import exudyn as exu
 import numpy as np
 
 from . import ureg
