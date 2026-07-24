@@ -134,7 +134,7 @@ function ensureDirectory(pyodide, filePath) {
 }
 
 async function loadSolverFromWheel(pyodide) {
-  const url = `${BASE_PATH}/dist/lift_solver-0.0.1-py3-none-any.whl`;
+  const url = `wheels/lift_solver-0.0.1-py3-none-any.whl`;
 
   console.log(`Loading .whl from ${url}`);
 
