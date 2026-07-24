@@ -1,0 +1,284 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: Python package
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write   # required to push commits and tags
+
+jobs:
+# --------------------------------------------------
+# 1. LINT
+# --------------------------------------------------
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: |
+          python -m pip install ruff
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Python lint
+        run: ruff check . || true
+
+      - name: Run JS lint
+        run: npx eslint . || true
+
+
+# --------------------------------------------------
+# 2. TEST (matrix)
+# --------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install pytest
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run tests
+#      env:
+#        CRANE_CURVE_FILENAME: "crane_curves.yaml"
+      run: |
+        pytest
+
+
+# --------------------------------------------------
+# 3. TAG AND VERSION FILE
+# --------------------------------------------------
+#  tag:
+#    needs: test
+#    runs-on: ubuntu-latest
+#    if: github.ref == 'refs/heads/main'
+
+#    outputs:
+#      tag: ${{ steps.tagger.outputs.tag }}
+
+#    steps:
+#      - name: Checkout repo
+#        uses: actions/checkout@v6
+#        with:
+#          fetch-depth: 0
+
+#      - name: Configure Git
+#        run: |
+#          git config --global user.email "akjore@outlook.com"
+#          git config --global user.name "akj"
+
+#      - name: Sync repo
+#        run: git pull origin main
+
+#      - name: Fetch all tags
+#        run: git fetch --tags
+
+#      - name: Generate tag
+#        id: tagger
+#        run: |
+#          DATE=$(date +'%Y.%-m.%-d')
+#          MATCHING=$(git tag -l "${DATE}*")
+
+#          if [ -z "$MATCHING" ]; then
+#            TAG="$DATE"
+#          else
+#            MAX_N=0
+#            for t in $MATCHING; do
+#              if [[ "$t" =~ ^${DATE}\.post([0-9]+)$ ]]; then
+#                n="${BASH_REMATCH[1]}"
+#                if (( n > MAX_N )); then MAX_N=$n; fi
+#              fi
+#            done
+#            TAG="${DATE}.post$((MAX_N + 1))"
+#          fi
+
+#          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+#      - name: Create tag
+#        run: |
+#          git tag ${{ steps.tagger.outputs.tag }}
+
+#      - name: Write version file
+#        run: |
+#          echo "export const VERSION = '${{ steps.tagger.outputs.tag }}';" > webapp/js/version.js
+
+#      - name: Commit version file
+#        run: |
+#          git add webapp/js/version.js
+#          git commit -m "Update version ${{ steps.tagger.outputs.tag }}" || echo "No changes"
+
+#      - name: Push commit and tag
+#        run: |
+#          git push origin main
+#          git push origin ${{ steps.tagger.outputs.tag }}
+
+
+# --------------------------------------------------
+# 4. BUILD WHEEL
+# --------------------------------------------------
+  build:
+#    needs: tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --user --upgrade pip
+          python -m pip install --user --upgrade build
+
+      - name: Build wheel
+        run: |
+          python -m build
+          WHEEL=$(ls dist/*.whl | head -n 1)
+          echo "wheel=$WHEEL" >> $GITHUB_OUTPUT
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel
+          path: dist/*.whl
+
+
+# --------------------------------------------------
+# 5. CREATE RELEASE AND ATTACH WHEEL
+# --------------------------------------------------
+  release:
+#    needs: [build, tag]
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: wheel
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+#          tag_name: ${{ needs.tag.outputs.tag }}
+#          name: Release ${{ needs.tag.outputs.tag }}
+          files: dist/*.whl
+
+
+# --------------------------------------------------
+# 6. DEPLOY TO GH-PAGES
+# --------------------------------------------------
+  deploy_pages:
+#    needs: [build, tag]
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Sync with latest main
+        run: |
+          git pull origin main
+
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: wheel
+          path: wheels
+
+      - name: Inject wheel into webapp
+        run: |
+          rm -rf webapp/wheels
+          mkdir -p webapp/wheels
+          cp wheels/*.whl webapp/wheels/
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: webapp
+          publish_branch: gh-pages
+          force_orphan: true
+
+
+# --------------------------------------------------
+# 7. UPDATE MAIN WITH WHEEL
+# --------------------------------------------------
+#  update_main:
+#    needs: build
+#    runs-on: ubuntu-latest
+
+#    if: github.actor != 'github-actions[bot]'
+
+#    steps:
+#      - uses: actions/checkout@v6
+#        with:
+#          persist-credentials: true
+#          fetch-depth: 0
+
+#      - name: Sync with latest main
+#        run: |
+#          git pull origin main
+
+#      - name: Download wheel artifact
+#        uses: actions/download-artifact@v8
+#        with:
+#          name: wheel
+#          path: dist
+
+#      - name: Copy wheel into webapp
+#        run: |
+#          mkdir -p webapp/wheels
+#          rm -f webapp/wheels/*.whl
+#          cp dist/*.whl webapp/wheels/
+
+#      - name: Commit and push wheel
+#        run: |
+#          git config user.name "github-actions"
+#          git config user.email "github-actions@github.com"
+
+#          git add -f webapp/wheels/*.whl
+
+#          git diff --cached --quiet || git commit -m "Update wheel from CI build"
+
+#          git push origin main
