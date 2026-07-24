@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lift Solver</title>
+
+    <style>
+        :root {
+            --bg: #1e1e1e;
+            --panel: #252526;
+            --border: #3c3c3c;
+            --text: #d4d4d4;
+            --text-dim: #9a9a9a;
+            --accent: #007acc;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            font-family: "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* -------------------------------------------------- */
+        /* Header */
+        /* -------------------------------------------------- */
+
+        .header {
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .title {
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .status {
+            color: #4caf50;
+            font-size: 0.9rem;
+        }
+
+        /* -------------------------------------------------- */
+        /* Toolbar */
+        /* -------------------------------------------------- */
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+
+        button {
+            background: #333;
+            border: 1px solid #555;
+            color: var(--text);
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            border-color: var(--accent);
+        }
+
+        .toolbar-spacer {
+            flex: 1;
+        }
+
+        /* -------------------------------------------------- */
+        /* Main Layout */
+        /* -------------------------------------------------- */
+
+        .main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* -------------------------------------------------- */
+        /* Tree Panel */
+        /* -------------------------------------------------- */
+
+        .sidebar {
+            width: 280px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            padding: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .tree {
+            padding: 10px;
+        }
+
+
+        .tree-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .indent-1 { padding-left: 20px; }
+        .indent-2 { padding-left: 40px; }
+
+        /* -------------------------------------------------- */
+        /* Centre Area */
+        /* -------------------------------------------------- */
+
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .viewport {
+            flex: 1;
+            position: relative;
+            background: #181818;
+        }
+
+        #three-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .view-controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+
+            display: flex;
+            gap: 6px;
+        }
+
+        .view-controls button {
+            font-size: 12px;
+            padding: 4px 10px;
+        }
+
+        .orientation-cube {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+
+            width: 70px;
+            height: 70px;
+
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.4);
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            color: var(--text-dim);
+            font-size: 12px;
+        }
+
+        /* -------------------------------------------------- */
+        /* Properties */
+        /* -------------------------------------------------- */
+
+        .properties {
+            height: 180px;
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+            overflow-y: auto;
+        }
+
+        .properties-content {
+            padding: 6px 12px;
+            display: grid;
+            grid-auto-flow: column;
+            grid-template-rows: repeat(5, auto);
+            column-gap: 24px;
+            row-gap: 4px;
+        }
+
+        .property-row {
+            display: flex;
+            gap: 6px;
+            break-inside: avoid;
+        }
+
+        .property-label {
+            width: 120px;
+            font-weight: 600;
+            color: var(--text-dim);
+        }
+
+        .tree-item.selected {
+            border-left: 3px solid #4d9fff;
+            padding-left: 13px; /* offset border width */
+        }
+
+        .display-option {
+            display: block;
+            padding-left: 16px;
+            white-space: nowrap;
+            padding-left: 24px;
+           user-select: none;
+        }
+
+        .tree-section-header:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .tree-item,
+        .tree-section-header {
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        .tree-section-header {
+            padding-left: 0px;
+        }
+
+        .tree-arrow {
+            display: inline-block;
+            width: 12px;
+            flex: 0 0 12px;
+        }
+
+
+        .tree {
+            user-select: none;
+        }
+
+
+        input[type="checkbox"] {
+            accent-color: #4d9fff;
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="title">Lift Solver</div>
+        <div class="status">● Ready</div>
+    </div>
+
+    <div class="toolbar">
+
+        <button>▶ Run</button>
+        <button>■ Stop</button>
+        <button>✅ Code Check</button>
+
+        <div class="toolbar-spacer"></div>
+
+        <button id="fit-button">Fit</button>
+
+    </div>
+
+    <div class="main">
+
+        <!-- LEFT TREE -->
+
+        <div class="sidebar">
+
+            <div class="panel-title">Model</div>
+
+            <div class="tree">
+                <div id="tree-content"></div>
+
+                <br>
+
+                <div id="results-header" class="tree-section-header">
+                    <span class="tree-arrow">▶</span>
+                    <span>Results</span>
+                </div>
+
+                <div id="codecheck-header" class="tree-section-header">
+                    <span class="tree-arrow">▶</span>
+                    <span>Code Check</span>
+                </div>
+
+                <br>
+
+                <div id="display-header" class="tree-section-header" data-target="tree-display">
+                    <span id="display-arrow" class="tree-arrow">▼</span>
+                    <span>Display</span>
+                </div>
+
+                <div id="display-section" class="tree-section">
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-bodies" checked>Bodies
+                    </label>
+
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-shackles" checked>Shackles
+                    </label>
+
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-slings" checked>Slings
+                    </label>
+
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-attachment-points" checked>Attachment Points
+                    </label>
+
+                    <label class="tree-item display-option">
+                        <input type="checkbox" id="show-cogs" checked>CoGs
+                    </label>
+                </div>
+            </div>
+
+
+        </div>
+
+        <!-- MAIN VIEWPORT -->
+
+        <div class="workspace">
+
+            <div class="viewport">
+
+                <div id="three-container">
+                    <!-- Three.js renderer goes here -->
+                </div>
+
+                <div class="view-controls">
+                    <button id="iso-button">ISO</button>
+                    <button id="top-button">TOP</button>
+                    <button id="front-button">FRONT</button>
+                    <button id="side-button">SIDE</button>
+                </div>
+
+                <div class="orientation-cube">
+                    XYZ
+                </div>
+
+            </div>
+
+            <!-- PROPERTIES -->
+
+            <div class="properties">
+
+                <div class="panel-title">Properties</div>
+
+                <div class="properties-content" id="properties-content">
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.181.1/build/three.module.js",
+
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.1/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.181.1/examples/js/loaders/STLLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/TrackballControls.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>

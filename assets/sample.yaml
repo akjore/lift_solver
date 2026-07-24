@@ -1,0 +1,258 @@
+meta:
+  name: "LQE installation"
+
+environment:
+  gravity: [0.0 m/s**2, 0.0m/s**2, -9.81 m/s**2]
+
+# ----------------------------------------------------------
+# Bodies
+# ----------------------------------------------------------
+bodies:
+  - id: LQE
+    mass: 200 t * 1.2 + 14 t # offshore lift weight w/rigging
+
+    # --- Local definition ---
+    cog: [262.350 m, 531.000 m, 64.450 m]
+
+    points: # Ref. measurements in T&I model. See dwg. C056-LE-N-XF-0744-01 once available.
+      - id: lp1
+        position: [(257.775+258.135)/2 m, 527.592 m, (69.638+69.803)/2 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
+      - id: lp2
+        position: [(257.775+258.135)/2 m, 534.492 m, (69.638+69.803)/2 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
+      - id: lp3
+        position: [(267.225+266.865)/2 m, 527.592 m, (69.638+69.803)/2 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
+      - id: lp4
+        position: [(267.225+266.865)/2 m, 534.492 m, (69.638+69.803)/2 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 160 mm
+        length: 655 mm
+
+    # --- Global placement of the CoG ---
+    pose:
+      position: [-262.350 m, -531.000 m, -64.450 m]
+      orientation: [0.0 degree, 0.0 degree, 0.0 degree]
+
+    # --- Optional visual representation, offset relative to CoG ---
+    visual:
+      type: box
+      size: [9.5 m, 16.2 m, 10.2 m]   # length, width, height
+#      offset: [262.350 m - (257.750+267.244)/2 m, 531.0 m - (522.512+528.725)/2 m, 64.450 m - (59.093+69.320)/2 m]
+      offset: [0 m, 0 m, 0 m]
+#      color: 0x888888
+      opacity: 0.4
+
+  - id: SAI.SB-78
+    mass: 7.585 t
+
+    # --- Local definition ---
+    cog: [0.0 m, 0.0 m, 0.0 m]
+
+    points: # Taken from rigging report SA-X2-R-14008; update when dwg available.
+      - id: west_lower
+        position: [4.545 m, 0.0 m, -0.630 m]
+        axis: [0, 1, 0]
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
+      - id: west_upper
+        position: [4.410 m, 0.0 m,  0.630 m]
+        axis: [0, 1, 0]
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
+      - id: east_lower
+        position: [-4.545 m, 0.0 m, -0.630 m]
+        axis: [0, 1, 0]
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
+      - id: east_upper
+        position: [-4.410 m, 0.0 m,  0.630 m]
+        axis: [0, 1, 0]
+        type: padeye
+        hole_diameter: 210 mm
+        outer_diameter: 600 mm
+        thickness: 280 mm
+
+    # --- Global placement ---
+    pose:
+      position: [0.0 m, 0.0 m, 17.0 m]
+      orientation: [0.0 degree, 0.0 degree, 180.0 degree]
+
+    # --- Optional visual representation ---
+    visual:
+      type: cylinder
+      diameter: 0.3239 m
+      length: 10.0 m
+      axis: x
+#      color: 0x0066cc
+
+  - id: hook
+    mass: 0 t
+
+    cog: [0.0 m, 0.0 m, 0.0 m]
+
+    points:
+      - id: prong1
+        position: [530 mm, 0.0 m, 0.0 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 420 mm
+        length: 420 mm
+      - id: prong2
+        position: [-530 mm, 0.0 m, 0.0 m]
+        type: pin
+        axis: [1, 0, 0]
+        diameter: 420 mm
+        length: 420 mm
+      - id: socket
+        position: [0.0 m, 0.0 m, 1.0 m]
+
+    pose:
+      position: [0.0 m, 0.0 m, 30.0 m]
+      orientation: [0.0 degree, 0.0 degree, 0.0 degree]
+
+# ----------------------------------------------------------
+# Shackles
+# ----------------------------------------------------------
+shackles:
+  - id: UpWest
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.west_upper
+
+  - id: UpEast
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.east_upper
+
+  - id: LowWest
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.west_lower
+    rotation_about_pin: 180 deg
+
+  - id: LowEast
+    model: GN-H14-600
+    pin_connection: SAI.SB-78.east_lower
+    rotation_about_pin: 180 deg
+
+# ----------------------------------------------------------
+# Elements
+# Note:
+# Hooke's law gives F = k * dL = (EA / L0) * dL
+# Below, either specify k or EA
+# ----------------------------------------------------------
+elements:
+
+  - id: lower_NE
+    ap1: LQE.lp4
+    ap2: LowEast.bow
+    Lultimate: 11.525 m
+#    k: 5900 kN/m
+#    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
+
+  - id: lower_NW
+    ap1: LQE.lp2
+    ap2: LowWest.bow
+    Lultimate: 11.525 m
+#    k: 5900 kN/m
+    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
+
+  - id: lower_SE
+    ap1: LQE.lp3
+    ap2: LowEast.bow
+    Lultimate: 11.500 m
+#    k: 6200 kN/m
+    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
+
+  - id: lower_SW
+    ap1: LQE.lp1
+    ap2: LowWest.bow
+    Lultimate: 11.500 m
+#    k: 6200 kN/m
+    diameter: 80 mm
+    kind: HMPE
+    mbl: 449 t
+
+  - id: upper_E
+    ap1: UpEast.bow
+    ap2: hook.prong1
+    Lultimate: 10.103 m
+#    k: 9400 kN/m
+    diameter: 112 mm
+    kind: HMPE
+    mbl: 754 t
+
+  - id: upper_W
+    ap1: UpWest.bow
+    ap2: hook.prong2
+    Lultimate: 10.000 m
+#    k: 9400 kN/m
+    diameter: 112 mm
+    kind: HMPE
+    mbl: 754 t
+
+# ----------------------------------------------------------
+# Constraints
+# ----------------------------------------------------------
+constraints:
+
+  - id: hook_restraint
+    ap1: hook.socket
+    ap2: world
+    constraints: [true, true, true, false, false, true]
+
+code_check:
+  k_skl: 1.1
+
+#  daf: 1.10
+
+  SAI.SB-78:
+    daf: 1.3
+
+  lower_NE:
+    daf: 1.4
+
+  LowEast:
+    gamma_w: 1.10
+
+  upper_W:
+    gamma_w: 1.05
+
+# ----------------------------------------------------------
+# Solver-generated state
+# ----------------------------------------------------------
+initial_state:
+  # format: [x, y, z, roll, pitch, yaw]
+  #
+  # IMPORTANT:
+  # - Bodies WITHOUT a parent are absolute (global)
+  # - Bodies WITH a parent are relative to their parent
+
+  LQE: [-262.30882 meter, -530.9881 meter, -63.733567 meter, 0.007523813 degree, -0.044668259 degree, -0.00074939514 degree]
+  SAI.SB-78: [0.14128696 meter, -2.2284277e-05 meter, 18.944554 meter, 0.00028886089 degree, 0.018232938 degree, 179.99855 degree]
+  hook: [0.013793991 meter, 0.00024112432 meter, 30.000094 meter, 0.013815391 degree, -0.79036001 degree, -7.1802824e-07 degree]
+  UpWest: [4.41 meter, 1.3465314e-11 meter, 0.63 meter, -19.86656 degree, -1.1063007e-12 degree, 90 degree]
+  UpEast: [-4.41 meter, -1.3442244e-11 meter, 0.63 meter, 21.042221 degree, -5.9858066e-13 degree, 90 degree]
+  LowWest: [4.545 meter, 1.3854094e-11 meter, -0.63 meter, -179.99156 degree, 1.4294425e-11 degree, -90 degree]
+  LowEast: [-4.545 meter, -1.3877138e-11 meter, -0.63 meter, -179.99153 degree, -5.8499833e-11 degree, -90 degree]
